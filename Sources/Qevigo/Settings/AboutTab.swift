@@ -3,6 +3,8 @@ import QevigoCore
 import SwiftUI
 
 struct AboutTab: View {
+    @EnvironmentObject private var updates: UpdateController
+
     var body: some View {
         SettingsPage {
             VStack(spacing: 0) {
@@ -26,9 +28,9 @@ struct AboutTab: View {
                 Form {
                     LabeledContent(tr("开源协议", "License"), value: "MIT")
                     LabeledContent(tr("系统要求", "Requires"), value: tr("macOS 14 或更高版本", "macOS 14 or later"))
-                    if UpdateChecker.isAvailable {
+                    if updates.isAvailable {
                         LabeledContent(tr("软件更新", "Software Update")) {
-                            Button(tr("检查更新…", "Check for Updates…")) { Task { await UpdateChecker.check(silentWhenCurrent: false) } }
+                            Button(tr("检查更新…", "Check for Updates…")) { updates.checkForUpdates() }
                         }
                     }
                     LabeledContent(tr("原项目", "Original Project")) {

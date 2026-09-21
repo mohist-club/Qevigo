@@ -21,7 +21,6 @@ public struct AppPreferences: Codable, Equatable, Sendable {
     /// 0 is more solid, 1 is more transparent.
     public var glassTransparency = 0.56
     public var translateShortcutEnabled = true
-    public var automaticUpdateChecks = true
 
     public init() {}
 
@@ -33,7 +32,6 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         let transparency = try c.decodeIfPresent(Double.self, forKey: .glassTransparency) ?? 0.56
         glassTransparency = min(max(transparency, 0.15), 0.85)
         translateShortcutEnabled = try c.decodeIfPresent(Bool.self, forKey: .translateShortcutEnabled) ?? true
-        automaticUpdateChecks = try c.decodeIfPresent(Bool.self, forKey: .automaticUpdateChecks) ?? true
     }
 }
 

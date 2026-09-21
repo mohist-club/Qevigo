@@ -58,9 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             return
         }
-        if UpdateChecker.isAvailable, env.settings.preferences.automaticUpdateChecks {
-            Task { await UpdateChecker.check(silentWhenCurrent: true) }
-        }
+        env.updates.isBusy = { [weak self] in self?.coordinator.isPanelVisible ?? false }
+        env.updates.start()
         if arguments.contains("--settings") { openSettings() }
         if let index = CommandLine.arguments.firstIndex(of: "--tab"),
            CommandLine.arguments.indices.contains(index + 1),
@@ -102,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         addBindingItems(to: statusMenu)
         statusMenu.addItem(.separator())
         statusMenu.addItem(item(tr("设置…", "Settings…"), #selector(openSettingsAction), key: ","))
-        if UpdateChecker.isAvailable {
+        if env.updates.isAvailable {
             statusMenu.addItem(item(tr("检查更新…", "Check for Updates…"), #selector(checkForUpdates)))
         }
         statusMenu.addItem(.separator())
@@ -197,7 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openSettingsAction() { openSettings() }
 
-    @objc private func checkForUpdates() { Task { await UpdateChecker.check(silentWhenCurrent: false) } }
+    @objc private func checkForUpdates() { env.updates.checkForUpdates() }
 
     func openSettings(tab: SettingsTab? = nil) {
         if settingsController == nil { settingsController = SettingsWindowController(env: env) }

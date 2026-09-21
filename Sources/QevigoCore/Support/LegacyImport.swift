@@ -85,7 +85,6 @@ public enum LegacyImport {
         if let value = json["glassTransparency"] as? Double {
             preferences.glassTransparency = min(max(value, 0.15), 0.85)
         }
-        if let updates = json["automaticUpdateChecks"] as? Bool { preferences.automaticUpdateChecks = updates }
         return preferences
     }
 

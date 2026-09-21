@@ -9,6 +9,7 @@ final class AppEnvironment {
     let secrets: EncryptedFileSecretStore
     let settings: SettingsStore
     let translation: TranslationService
+    let updates = UpdateController()
 
     private init() {
         secrets = EncryptedFileSecretStore(store: files)

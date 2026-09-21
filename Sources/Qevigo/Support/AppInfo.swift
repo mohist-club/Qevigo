@@ -11,11 +11,6 @@ enum AppInfo {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
     }
 
-    /// "owner/repo" of the GitHub project that publishes releases. Leave nil
-    /// until this project has its own release channel; the update controls are
-    /// hidden while it is nil.
-    static let updateRepository: String? = "mohist-club/Qevigo"
-
     static let originalProject = URL(string: "https://github.com/mohist-club/Poptro")!
     static let issuesURL = URL(string: "https://github.com/mohist-club/Qevigo/issues")!
 }

@@ -42,7 +42,8 @@ Qevigo 基于 [mohist-club/Poptro](https://github.com/mohist-club/Poptro)（MIT�
 ## 安装
 
 从 [Releases](https://github.com/mohist-club/Qevigo/releases) 下载 `Qevigo.dmg`，把 `Qevigo.app` 拖进「应用程序」。
-这是 ad-hoc 签名版本，首次打开会被系统拦截：到 系统设置 → 隐私与安全性 里点「仍要打开」即可。
+App 使用自签名证书，没有经过 Apple 公证，首次打开会被系统拦截：到 系统设置 → 隐私与安全性 里点「仍要打开」即可。
+之后的版本会自动升级，不会再被拦截，辅助功能授权也会保留。
 
 ## 构建与运行
 
@@ -50,7 +51,8 @@ Qevigo 基于 [mohist-club/Poptro](https://github.com/mohist-club/Poptro)（MIT�
 
 ```bash
 swift test                          # 单元测试（39 个）
-./scripts/build-app.sh              # 生成 dist/Qevigo.app（release，ad-hoc 签名）
+./scripts/setup-signing.sh          # 只需一次：生成签名证书与 Sparkle 密钥（见「签名与自动升级」）
+./scripts/build-app.sh              # 生成 dist/Qevigo.app（release，用上面的证书签名）
 CONFIG=debug ./scripts/build-app.sh # 调试构建，更快
 ./scripts/make-dmg.sh               # 生成 dist/Qevigo.dmg 与 dist/Qevigo.zip
 open dist/Qevigo.app
@@ -58,7 +60,7 @@ open dist/Qevigo.app
 
 首次运行需要在 系统设置 → 隐私与安全性 → 辅助功能 中授权。
 授权与 App 路径绑定：日常使用请把 `Qevigo.app` 放到 `/Applications` 后再授权，避免反复授权。
-ad-hoc 签名的 App 首次打开会被 Gatekeeper 拦截，到 隐私与安全性 里点「仍要打开」。
+没有运行 `setup-signing.sh` 时会退回 ad-hoc 签名，可以本地调试，但不能用于发版。
 
 默认翻译快捷键是 `⌃⌥T`（避免占用各 App 通用的 `⌘G` 查找下一个），可在 设置 → 通用 修改。
 
@@ -92,7 +94,7 @@ Tests/QevigoCoreTests/
 
 数据在 `~/Library/Application Support/Qevigo/`，与原版 Poptro 的目录互不影响，两者可并存。
 API Key 用 AES-GCM 加密后保存（密钥由本机硬件 UUID 派生），文件权限 0600。这样可避免明文落盘，
-也避免 ad-hoc 签名的 App 反复弹钥匙串授权；但它不等同于钥匙串或硬件安全模块。
+也避免未公证的 App 反复弹钥匙串授权；但它不等同于钥匙串或硬件安全模块。
 
 环境变量 `QEVIGO_DATA_DIR` 可改数据目录（测试用）。
 
@@ -110,10 +112,54 @@ QEVIGO_DATA_DIR=/tmp/data dist/Qevigo.app/Contents/MacOS/Qevigo --demo-panel "He
 以下依赖系统权限或真实第三方 App，自动化测试覆盖不到：辅助功能取词与剪贴板兜底（原生 App、浏览器、
 Electron）、全局快捷键、开机启动、多屏幕下浮窗位置、各服务商的真实接口。
 
-## 更新检查
+## 签名与自动升级
 
-应用会读取本仓库的 GitHub Releases，有新版本时提示下载 DMG，需要手动替换（ad-hoc 签名无法自动替换自身）。
-仓库地址在 `AppInfo.updateRepository`，设为 `nil` 会隐藏所有更新相关界面。
+App 通过 [Sparkle 2](https://sparkle-project.org) 自动升级：每天检查一次，新版本在后台下载，
+翻译窗口关闭时自动安装并重启。设置 → 通用 → 软件更新 可以关闭自动检查或自动安装；
+菜单栏菜单和「关于」页有「检查更新…」。
+
+两道校验保证只安装我们发布的版本：
+
+1. **EdDSA 签名**：每个更新包都用 Sparkle 私钥签名，App 内置对应公钥（Info.plist 的 `SUPublicEDKey`），
+   签名不符的包会被拒绝。
+2. **代码签名身份**：新版本必须和正在运行的版本使用同一张代码签名证书，否则 Sparkle 拒绝安装。
+
+所有构建都用同一张自签名证书签名（不是 ad-hoc）。macOS 的辅助功能授权认的是「Bundle ID + 证书」，
+所以升级后授权会保留。首次安装仍会被系统拦截一次，这一步只有 Apple 开发者账号加公证才能去掉。
+
+### 签名材料
+
+`./scripts/setup-signing.sh` 会在 `~/.qevigo-signing/` 生成下面这些文件，它们不在仓库里，**请务必备份**：
+
+| 文件 | 用途 |
+| --- | --- |
+| `signing.keychain-db`、`keychain-password` | 专用钥匙串及其密码，里面是代码签名证书（不影响登录钥匙串） |
+| `signing.p12` | 证书和私钥的备份，密码同上 |
+| `sparkle_private_key` | Sparkle EdDSA 私钥，用来给更新包签名 |
+| `sparkle_public_key` | 对应公钥，已写进 Info.plist |
+
+丢失证书或 Sparkle 私钥后，已安装的用户就收不到自动升级了，只能手动重装并重新授权辅助功能。
+换一台 Mac 发版时，把整个文件夹复制过去即可。
+
+### 发版
+
+```bash
+./scripts/release.sh 1.0.3 release-notes.md
+```
+
+脚本会依次：提升版本号和构建号、运行测试、签名构建、打包 DMG / ZIP、
+生成签名过的 `appcast.xml`、提交并打标签、推送、创建 GitHub Release（附 DMG、ZIP、appcast.xml）。
+App 的更新源是 `releases/latest/download/appcast.xml`，因此始终指向最新的 Release。
+
+### 测试自动升级
+
+```bash
+QEVIGO_FEED_URL=http://127.0.0.1:8765/appcast.xml QEVIGO_CHECK_UPDATES_ON_LAUNCH=1 \
+  /path/to/旧版/Qevigo.app/Contents/MacOS/Qevigo
+```
+
+`QEVIGO_FEED_URL` 把更新源指向本地服务器，`QEVIGO_CHECK_UPDATES_ON_LAUNCH=1` 让它启动后立即检查。
+本地的 appcast 可以用 `./scripts/make-appcast.sh http://127.0.0.1:8765` 生成。
 
 ## 许可
 

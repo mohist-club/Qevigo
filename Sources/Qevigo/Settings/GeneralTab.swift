@@ -5,6 +5,7 @@ import SwiftUI
 
 struct GeneralTab: View {
     @EnvironmentObject private var store: SettingsStore
+    @EnvironmentObject private var updates: UpdateController
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var launchError: String?
     @State private var accessibilityGranted = PermissionService.isAccessibilityTrusted
@@ -101,9 +102,17 @@ struct GeneralTab: View {
                     }
                 }
 
-                if AppInfo.updateRepository != nil {
-                    LabeledContent(tr("自动检查更新", "Check for Updates")) {
-                        Toggle(tr("开启", "On"), isOn: $store.preferences.automaticUpdateChecks)
+                if updates.isAvailable {
+                    LabeledContent(tr("软件更新", "Software Update")) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Toggle(tr("自动检查更新", "Check for updates automatically"), isOn: $updates.automaticallyChecks)
+                            Toggle(tr("自动下载并安装", "Download and install automatically"), isOn: $updates.automaticallyInstalls)
+                                .disabled(!updates.automaticallyChecks)
+                            FormNote(tr(
+                                "新版本会在后台下载，翻译窗口关闭时自动安装并重启，设置和授权都会保留。",
+                                "New versions download in the background and install when the translation window is closed. Settings and permissions are kept."
+                            ))
+                        }
                     }
                 }
 

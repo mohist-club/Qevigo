@@ -100,11 +100,11 @@ private final class SettingsTabViewController: NSTabViewController {
     private func rootView(for tab: SettingsTab, env: AppEnvironment) -> AnyView {
         let store = env.settings
         switch tab {
-        case .general: return AnyView(GeneralTab().environmentObject(store))
+        case .general: return AnyView(GeneralTab().environmentObject(store).environmentObject(env.updates))
         case .shortcuts: return AnyView(ShortcutsTab().environmentObject(store))
         case .services: return AnyView(ServicesTab(health: env.translation.health).environmentObject(store))
         case .advanced: return AnyView(AdvancedTab().environmentObject(store))
-        case .about: return AnyView(AboutTab().environmentObject(store))
+        case .about: return AnyView(AboutTab().environmentObject(store).environmentObject(env.updates))
         }
     }
 

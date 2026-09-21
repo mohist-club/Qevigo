@@ -29,6 +29,14 @@
     <true/>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>SUFeedURL</key>
+    <string>https://github.com/mohist-club/Qevigo/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>RUqeEDwr1icLVdCqvn+NuaG5zso2g//QrWqnVDMivqg=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSAppleEventsUsageDescription</key>

@@ -18,6 +18,8 @@ final class TranslationCoordinator {
         self.service = service
     }
 
+    var isPanelVisible: Bool { panel?.isVisible ?? false }
+
     func trigger() {
         guard !isCapturing else { return }
         isCapturing = true

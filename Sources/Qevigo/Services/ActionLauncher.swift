@@ -25,9 +25,7 @@ enum ActionLauncher {
     static func execute(_ binding: LaunchBinding) {
         switch binding.kind {
         case .application:
-            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: binding.payload), configuration: .init()) { _, error in
-                if let error { Task { @MainActor in present(error) } }
-            }
+            toggleApplication(at: URL(fileURLWithPath: binding.payload))
         case .system:
             guard let action = SystemShortcutAction(rawValue: binding.payload) else { return }
             executeSystem(action, displayName: binding.name)
@@ -37,6 +35,27 @@ enum ActionLauncher {
                 do { _ = try await run(spec) } catch { present(error) }
             }
         }
+    }
+
+    /// Hides the app when it is already frontmost; otherwise launches it or
+    /// brings it forward (unhiding it and reopening a window if it has none).
+    static func toggleApplication(at url: URL) {
+        if let frontmost = NSWorkspace.shared.frontmostApplication, isSameApp(frontmost, url) {
+            frontmost.hide()
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
+            if let error { Task { @MainActor in present(error) } }
+        }
+    }
+
+    private static func isSameApp(_ running: NSRunningApplication, _ url: URL) -> Bool {
+        if let id = Bundle(url: url)?.bundleIdentifier, let runningID = running.bundleIdentifier {
+            return id == runningID
+        }
+        return running.bundleURL?.resolvingSymlinksInPath().standardizedFileURL == url.resolvingSymlinksInPath().standardizedFileURL
     }
 
     private static func executeSystem(_ action: SystemShortcutAction, displayName: String) {

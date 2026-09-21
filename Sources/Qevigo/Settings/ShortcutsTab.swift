@@ -69,7 +69,9 @@ struct ShortcutsTab: View {
                         .help(tr("删除所选快捷键", "Delete Selected Shortcut"))
 
                     Spacer()
-                    FormNote(tr("共 \(store.bindings.count + 1) 个", "\(store.bindings.count + 1) total"))
+                    Text(tr("共 \(store.bindings.count + 1) 个", "\(store.bindings.count + 1) total"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 28)
@@ -137,7 +139,7 @@ struct ShortcutsTab: View {
 
     private func subtitle(for binding: LaunchBinding) -> String {
         switch binding.kind {
-        case .application: return tr("打开应用", "Open Application")
+        case .application: return tr("打开 / 隐藏应用", "Open / Hide Application")
         case .shortcut: return tr("运行快捷指令", "Run Shortcut")
         case .system: return tr("系统操作", "System Action")
         case .script:
@@ -185,7 +187,7 @@ private struct ApplicationPicker: View {
     @State private var query = ""
 
     var body: some View {
-        SheetFrame(title: tr("选择应用", "Choose Application"), subtitle: tr("按下快捷键时打开所选应用。", "The app opens when the shortcut is pressed.")) {
+        SheetFrame(title: tr("选择应用", "Choose Application"), subtitle: tr("按快捷键打开应用；应用已在最前面时再按一次会隐藏它。", "The shortcut opens the app, or hides it if it is already in front.")) {
             VStack(spacing: 0) {
                 TextField(tr("搜索应用", "Search Apps"), text: $query)
                     .textFieldStyle(.roundedBorder)

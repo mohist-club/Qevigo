@@ -1,9 +1,10 @@
 import AppKit
 import Combine
+import KeyboardShortcuts
 import QevigoCore
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let env = AppEnvironment.shared
     private lazy var coordinator = TranslationCoordinator(store: env.settings, service: env.translation)
     private let hotkeys = HotkeyService()
@@ -16,7 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpStatusItem()
         rebuildMenus()
 
-        env.settings.onBindingsChanged = { [weak self] in self?.syncHotkeys() }
+        env.settings.onBindingsChanged = { [weak self] in
+            self?.syncHotkeys()
+            self?.rebuildMenus()
+        }
         env.settings.$preferences
             .map { ($0.interfaceLanguage, $0.translateShortcutEnabled) }
             .removeDuplicates { $0 == $1 }
@@ -94,7 +98,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildMenus() {
         let statusMenu = NSMenu()
-        statusMenu.addItem(item(tr("翻译选中文字", "Translate Selection"), #selector(translateNow)))
+        statusMenu.delegate = self
+        addBindingItems(to: statusMenu)
         statusMenu.addItem(.separator())
         statusMenu.addItem(item(tr("设置…", "Settings…"), #selector(openSettingsAction), key: ","))
         if UpdateChecker.isAvailable {
@@ -132,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func item(_ title: String, _ action: Selector, key: String = "", target: AnyObject? = nil) -> NSMenuItem {
         let menuItem = NSMenuItem(title: title, action: action, keyEquivalent: key)
-        menuItem.target = target ?? ([#selector(translateNow), #selector(openSettingsAction), #selector(checkForUpdates)].contains(action) ? self : nil)
+        menuItem.target = target ?? ([#selector(openSettingsAction), #selector(checkForUpdates)].contains(action) ? self : nil)
         return menuItem
     }
 
@@ -142,7 +147,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return holder
     }
 
-    @objc private func translateNow() { coordinator.trigger() }
+    /// One item per enabled binding, showing its key combination on the right.
+    private func addBindingItems(to menu: NSMenu) {
+        let bindings = env.settings.bindings.filter(\.isEnabled)
+        guard !bindings.isEmpty else {
+            let empty = NSMenuItem(title: tr("尚未设置快捷键", "No Shortcuts Yet"), action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+            let add = NSMenuItem(title: tr("添加快捷键…", "Add Shortcut…"), action: #selector(openShortcutsSettings), keyEquivalent: "")
+            add.target = self
+            menu.addItem(add)
+            return
+        }
+        for binding in bindings {
+            let menuItem = NSMenuItem(title: binding.name, action: #selector(runBinding(_:)), keyEquivalent: "")
+            menuItem.target = self
+            menuItem.representedObject = binding.id
+            menuItem.image = Self.menuIcon(for: binding)
+            menuItem.setShortcut(for: KeyboardShortcuts.Name(binding.hotkeyName))
+            menu.addItem(menuItem)
+        }
+    }
+
+    private static func menuIcon(for binding: LaunchBinding) -> NSImage? {
+        let image: NSImage?
+        switch binding.kind {
+        case .application: image = NSWorkspace.shared.icon(forFile: binding.payload).copy() as? NSImage
+        case .shortcut: image = NSImage(systemSymbolName: "square.stack.3d.up", accessibilityDescription: nil)
+        case .system: image = NSImage(systemSymbolName: "gearshape.2", accessibilityDescription: nil)
+        case .script: image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+        }
+        image?.size = NSSize(width: 16, height: 16)
+        return image
+    }
+
+    @objc private func runBinding(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? UUID,
+              let binding = env.settings.bindings.first(where: { $0.id == id }) else { return }
+        ActionLauncher.execute(binding)
+    }
+
+    @objc private func openShortcutsSettings() { openSettings(tab: .shortcuts) }
+
+    // Global hotkeys would be buffered while the menu tracks events and fire
+    // after it closes, so pause them while the menu is open.
+    func menuWillOpen(_ menu: NSMenu) { hotkeys.suspend() }
+
+    func menuDidClose(_ menu: NSMenu) { syncHotkeys() }
 
     @objc private func openSettingsAction() { openSettings() }
 

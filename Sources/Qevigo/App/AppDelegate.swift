@@ -87,7 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = Self.statusBarIcon()
+        item.button?.image = BrandMark.templateImage(size: 18)
         item.button?.imagePosition = .imageOnly
         statusItem = item
     }
@@ -153,24 +153,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsController?.show(tab: tab)
     }
 
-    /// Monochrome ⌘ mark whose lower-right corner becomes a speech-bubble tail.
-    private static func statusBarIcon() -> NSImage {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
-            NSImage(systemSymbolName: "command", accessibilityDescription: nil)?
-                .withSymbolConfiguration(configuration)?
-                .draw(in: NSRect(x: 2, y: 2, width: 14, height: 14))
-            let tail = NSBezierPath()
-            tail.move(to: NSPoint(x: 11.8, y: 4.1))
-            tail.line(to: NSPoint(x: 16.2, y: 1.2))
-            tail.line(to: NSPoint(x: 14.6, y: 6.2))
-            tail.close()
-            NSColor.black.setFill()
-            tail.fill()
-            return true
-        }
-        image.isTemplate = true
-        image.accessibilityDescription = "Qevigo"
-        return image
-    }
 }

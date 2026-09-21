@@ -136,8 +136,9 @@ struct TranslationPanelView: View {
 
     private var titleBar: some View {
         HStack(spacing: 8) {
-            Image(systemName: "command")
-                .font(.system(size: 15, weight: .medium))
+            Image(nsImage: BrandMark.templateImage(size: 17))
+                .renderingMode(.template)
+                .foregroundStyle(.primary)
                 .frame(width: 28, height: 28)
                 .neutralSurface(cornerRadius: 7)
                 .accessibilityHidden(true)
@@ -192,6 +193,7 @@ struct TranslationPanelView: View {
                     SelectorLabel(title: Languages.name(for: state.sourceLanguageCode))
                 }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .frame(width: 150)
                 Spacer(minLength: 4)
                 iconButton("speaker.wave.2", help: tr("朗读原文", "Speak Source")) {
@@ -221,6 +223,7 @@ struct TranslationPanelView: View {
                     SelectorLabel(title: Languages.name(for: state.targetLanguageCode))
                 }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .frame(width: 150)
                 Spacer(minLength: 4)
                 iconButton("speaker.wave.2", help: tr("朗读译文", "Speak Translation")) {

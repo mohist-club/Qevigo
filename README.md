@@ -1,5 +1,7 @@
 # Qevigo
 
+读作 “Key-vee-go”，中文名「奇维果」。
+
 macOS 菜单栏划词翻译：选中文字，按一下全局快捷键，弹出翻译窗口。
 
 Qevigo 基于 [mohist-club/Poptro](https://github.com/mohist-club/Poptro)（MIT）v1.6.0 重构。功能保持对齐，
@@ -68,6 +70,7 @@ Sources/QevigoCore/       无 UI 的核心库（可单测）
   Providers/              服务商目录 + 4 种协议后端（OpenAI 兼容 / Gemini / DeepL / Ollama）
   Routing/                健康状态与冷却、路由规划、首字超时、故障转移路由器
   Support/                存储、API Key 加密、语言识别、<think> 过滤、原版配置导入
+scripts/make-icon.swift   生成 App 图标（Resources/AppIcon.iconset）
 Sources/Qevigo/           App
   App/                    入口、AppDelegate、SettingsStore（唯一设置来源）
   Settings/               原生设置窗口与五个标签页

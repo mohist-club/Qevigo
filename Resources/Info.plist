@@ -3,19 +3,19 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Poptro</string>
+    <string>Qevigo</string>
     <key>CFBundleDisplayName</key>
-    <string>Poptro</string>
+    <string>Qevigo</string>
     <key>CFBundleIdentifier</key>
-    <string>app.poptro.mac</string>
+    <string>app.qevigo.mac</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.0.0</string>
+    <string>1.0.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>Poptro</string>
+    <string>Qevigo</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleDevelopmentRegion</key>
@@ -34,6 +34,6 @@
     <key>NSAppleEventsUsageDescription</key>
     <string>需要控制其他应用以执行你绑定的快捷操作。</string>
     <key>NSAccessibilityUsageDescription</key>
-    <string>Poptro 需要辅助功能权限以读取当前选中的文字并响应全局快捷键。</string>
+    <string>Qevigo 需要辅助功能权限以读取当前选中的文字并响应全局快捷键。</string>
 </dict>
 </plist>

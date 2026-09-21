@@ -2,26 +2,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "Poptro",
+    name: "Qevigo",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Poptro", targets: ["Poptro"]),
-        .library(name: "PoptroCore", targets: ["PoptroCore"])
+        .executable(name: "Qevigo", targets: ["Qevigo"]),
+        .library(name: "QevigoCore", targets: ["QevigoCore"])
     ],
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.2.0")
     ],
     targets: [
-        .target(name: "PoptroCore", path: "Sources/PoptroCore"),
+        .target(name: "QevigoCore", path: "Sources/QevigoCore"),
         .executableTarget(
-            name: "Poptro",
-            dependencies: ["PoptroCore", "KeyboardShortcuts"],
-            path: "Sources/Poptro"
+            name: "Qevigo",
+            dependencies: ["QevigoCore", "KeyboardShortcuts"],
+            path: "Sources/Qevigo"
         ),
         .testTarget(
-            name: "PoptroCoreTests",
-            dependencies: ["PoptroCore"],
-            path: "Tests/PoptroCoreTests"
+            name: "QevigoCoreTests",
+            dependencies: ["QevigoCore"],
+            path: "Tests/QevigoCoreTests"
         )
     ]
 )

@@ -1,15 +1,15 @@
 #!/bin/bash
-# Packages dist/Poptro.app into dist/Poptro.dmg and dist/Poptro.zip.
+# Packages dist/Qevigo.app into dist/Qevigo.dmg and dist/Qevigo.zip.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-[ -d dist/Poptro.app ] || ./scripts/build-app.sh
+[ -d dist/Qevigo.app ] || ./scripts/build-app.sh
 
 STAGE="$(mktemp -d)"
-ditto dist/Poptro.app "$STAGE/Poptro.app"
+ditto dist/Qevigo.app "$STAGE/Qevigo.app"
 ln -s /Applications "$STAGE/Applications"
-rm -f dist/Poptro.dmg dist/Poptro.zip
-hdiutil create -volname "Poptro" -srcfolder "$STAGE" -ov -format UDZO dist/Poptro.dmg
+rm -f dist/Qevigo.dmg dist/Qevigo.zip
+hdiutil create -volname "Qevigo" -srcfolder "$STAGE" -ov -format UDZO dist/Qevigo.dmg
 rm -rf "$STAGE"
-ditto -c -k --sequesterRsrc --keepParent dist/Poptro.app dist/Poptro.zip
-echo "==> dist/Poptro.dmg, dist/Poptro.zip"
+ditto -c -k --sequesterRsrc --keepParent dist/Qevigo.app dist/Qevigo.zip
+echo "==> dist/Qevigo.dmg, dist/Qevigo.zip"

@@ -11,6 +11,8 @@ enum AppInfo {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
     }
 
-    static let originalProject = URL(string: "https://github.com/mohist-club/Poptro")!
+    static let author = "Wayne"
+    static let authorURL = URL(string: "https://moaclab.com/u/wayne")!
+    static let repositoryURL = URL(string: "https://github.com/mohist-club/Qevigo")!
     static let issuesURL = URL(string: "https://github.com/mohist-club/Qevigo/issues")!
 }

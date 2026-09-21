@@ -91,7 +91,7 @@ final class SettingsStore: ObservableObject {
         files.save(Array(benchmarks.values), to: StoreFile.benchmarks)
     }
 
-    // MARK: Import from the original Poptro
+    // MARK: Import from the legacy app
 
     struct ImportSummary {
         var services = 0

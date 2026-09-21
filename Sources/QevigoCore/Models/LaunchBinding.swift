@@ -22,7 +22,7 @@ public enum ShortcutScriptKind: String, Codable, CaseIterable, Identifiable, Sen
     public var id: String { rawValue }
 }
 
-/// One global-shortcut binding. Field names are kept from the original project
+/// One global-shortcut binding. Field names are kept from the legacy app
 /// so existing `launch_bindings.json` files import without changes.
 public struct LaunchBinding: Codable, Identifiable, Equatable, Sendable {
     public let id: UUID

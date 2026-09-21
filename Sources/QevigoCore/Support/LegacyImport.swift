@@ -1,6 +1,6 @@
 import Foundation
 
-/// Reads the configuration of the original Poptro (v1.x) so users can carry
+/// Reads the configuration of the legacy app (v1.x) so users can carry
 /// their services, API keys, shortcuts and preferences over.
 public enum LegacyImport {
     public static let legacyBundleID = "com.menubartranslator.app"
@@ -19,7 +19,7 @@ public enum LegacyImport {
     }
 
     public static func load(
-        supportDirectory: URL = AppPaths.poptroSupportDirectory,
+        supportDirectory: URL = AppPaths.legacySupportDirectory,
         defaults: [String: Any]? = UserDefaults.standard.persistentDomain(forName: legacyBundleID)
     ) -> Snapshot {
         var snapshot = Snapshot()
@@ -60,7 +60,7 @@ public enum LegacyImport {
         let defaultProvider = settings.defaultProvider
         for provider in [ProviderID.zhipu, .openai, .deepl, .groq, .google, .ollama] {
             settings.update(provider) { value in
-                // The original treated a default Ollama as configured.
+                // The legacy app treated a default Ollama as configured.
                 value.isEnabled = configured.contains(provider) || (provider == defaultProvider && provider == .ollama)
                 if let model = models[provider] ?? nil, !model.isEmpty { value.model = model }
                 if provider == .ollama, let url = json["ollamaBaseURL"] as? String { value.baseURL = url }

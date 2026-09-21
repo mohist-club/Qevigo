@@ -33,8 +33,14 @@ struct AboutTab: View {
                             Button(tr("检查更新…", "Check for Updates…")) { updates.checkForUpdates() }
                         }
                     }
-                    LabeledContent(tr("原项目", "Original Project")) {
-                        Link("github.com/mohist-club/Poptro", destination: AppInfo.originalProject)
+                    LabeledContent(tr("作者", "Author")) {
+                        Link(AppInfo.author, destination: AppInfo.authorURL)
+                    }
+                    LabeledContent(tr("主页", "Website")) {
+                        Link("moaclab.com/u/wayne", destination: AppInfo.authorURL)
+                    }
+                    LabeledContent(tr("源代码", "Source Code")) {
+                        Link("github.com/mohist-club/Qevigo", destination: AppInfo.repositoryURL)
                     }
                 }
                 .formStyle(.columns)
@@ -49,7 +55,7 @@ struct AboutTab: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 18)
 
-                Text(tr("基于 Poptro（MIT）重构。", "Based on Poptro (MIT)."))
+                Text("© 2026 \(AppInfo.author)")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.top, 4)

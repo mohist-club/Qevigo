@@ -13,8 +13,8 @@ public enum AppPaths {
         return applicationSupport.appendingPathComponent("Qevigo", isDirectory: true)
     }
 
-    /// Where the original Poptro (v1.x) keeps its files. Read only by `LegacyImport`.
-    public static var poptroSupportDirectory: URL {
+    /// Data folder of the legacy app (v1.x). Read only by `LegacyImport`.
+    public static var legacySupportDirectory: URL {
         applicationSupport.appendingPathComponent("Poptro", isDirectory: true)
     }
 }

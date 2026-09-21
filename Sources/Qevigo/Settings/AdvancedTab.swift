@@ -65,7 +65,7 @@ struct AdvancedTab: View {
                     VStack(alignment: .leading, spacing: 8) {
                         if let legacy {
                             HStack(spacing: 8) {
-                                Button(tr("从原版 Poptro 导入配置…", "Import from Original Poptro…")) { runImport(legacy) }
+                                Button(tr("导入旧版配置…", "Import Previous Settings…")) { runImport(legacy) }
                                 if let importMessage {
                                     Label(importMessage, systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
                                 }

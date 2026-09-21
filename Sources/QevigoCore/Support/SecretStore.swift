@@ -70,7 +70,7 @@ public final class EncryptedFileSecretStore: SecretStoring, @unchecked Sendable 
         return String(data: clear, encoding: .utf8)
     }
 
-    /// Also used to read keys written by the original Poptro (`legacy` salt).
+    /// Also used to read keys written by the legacy app (`legacy` salt).
     static func key(salt: String) -> SymmetricKey {
         SymmetricKey(data: SHA256.hash(data: Data("\(salt)|\(machineIdentifier())".utf8)))
     }

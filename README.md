@@ -4,20 +4,21 @@
 
 macOS 菜单栏划词翻译：选中文字，按一下全局快捷键，弹出翻译窗口。
 
-Qevigo 基于 [mohist-club/Poptro](https://github.com/mohist-club/Poptro)（MIT）v1.6.0 重构。功能保持对齐，
-设置窗口改为 **macOS 原生的工具栏标签页样式**（`NSTabViewController`，与系统 App 的设置窗口同一套控件），
-并新增**多服务自动故障转移**，解决免费额度下"有时候翻译没有响应"的问题。
+设置窗口是 **macOS 原生的工具栏标签页样式**（`NSTabViewController`，与系统 App 的设置窗口同一套控件），
+支持**多服务自动故障转移**，解决免费额度下"有时候翻译没有响应"的问题，并通过 Sparkle 自动升级。
+
+作者：[Wayne](https://moaclab.com/u/wayne)
 
 ## 功能
 
 - **划词翻译**：Accessibility 读取选中文字，失败时自动用「模拟 ⌘C 并恢复剪贴板」兜底；没有选中内容时弹出输入框手动翻译
 - **翻译服务**：智谱 GLM、OpenAI、DeepL、Groq、Google AI (Gemini)、Cerebras、Together AI、本地 Ollama、自定义 OpenAI 兼容端点
-- **自动故障转移**（新）：限流 / 额度用尽 / 长时间无响应时切换到下一个服务，出错的服务会被临时跳过
+- **自动故障转移**：限流 / 额度用尽 / 长时间无响应时切换到下一个服务，出错的服务会被临时跳过
 - **智能方向**：自动识别原文语言（NaturalLanguage，50+ 种），翻成「默认目标语言」，原文已是该语言则翻成「备用语言」
 - **读取可用模型**、**验证并测速**（首字耗时 / 总耗时 / 字符每秒）
 - **全局快捷键**：绑定应用、快捷指令、系统操作（锁屏、睡眠等，危险操作二次确认）、Shell / AppleScript / JXA 脚本
 - 浮窗可拖动、缩放、记住位置和大小、可锁定；朗读、复制、互换语言；浅色 / 深色 / 自动；中英文界面
-- 从原版 Poptro 一键导入配置（服务、API Key、快捷键、偏好）：设置 → 高级
+- 检测到旧版配置时可一键导入（服务、API Key、快捷键、偏好）：设置 → 高级
 
 ## 自动故障转移
 
@@ -71,7 +72,7 @@ Sources/QevigoCore/       无 UI 的核心库（可单测）
   Models/                 设置、语言目录、快捷键绑定
   Providers/              服务商目录 + 4 种协议后端（OpenAI 兼容 / Gemini / DeepL / Ollama）
   Routing/                健康状态与冷却、路由规划、首字超时、故障转移路由器
-  Support/                存储、API Key 加密、语言识别、<think> 过滤、原版配置导入
+  Support/                存储、API Key 加密、语言识别、<think> 过滤、旧版配置导入
 scripts/make-icon.swift   生成 App 图标（Resources/AppIcon.iconset）
 Sources/Qevigo/           App
   App/                    入口、AppDelegate、SettingsStore（唯一设置来源）
@@ -81,18 +82,18 @@ Sources/Qevigo/           App
 Tests/QevigoCoreTests/
 ```
 
-**相对原版的结构调整**
+**设计要点**
 
-- 服务后端统一为 `AsyncThrowingStream`，基于 `URLSession.bytes`。原版的 `TranslationService` / `OllamaService` 是持有可变回调的单例，并发请求会互相覆盖。
-- 设置只有一个来源 `SettingsStore`。原版「通用」和「服务」页各持一份 `TranslationSettings` 副本并整体保存，会互相覆盖。
+- 服务后端统一为 `AsyncThrowingStream`，基于 `URLSession.bytes`，每次请求相互独立，并发请求不会互相覆盖。
+- 设置只有一个来源 `SettingsStore`，各设置页读写同一份数据，不会互相覆盖。
 - 新增服务商只需在 `ProviderCatalog` 加一项数据；OpenAI 兼容的服务不需要新代码。
 - 新请求会取消旧请求，过期结果不会写进界面。
 - 过滤 Qwen3 / DeepSeek 等模型输出的 `<think>…</think>`，不会混进译文。
-- Gemini 的 API Key 放在请求头，不再出现在 URL 里。
+- Gemini 的 API Key 放在请求头，不会出现在 URL 里。
 
 ## 数据
 
-数据在 `~/Library/Application Support/Qevigo/`，与原版 Poptro 的目录互不影响，两者可并存。
+数据在 `~/Library/Application Support/Qevigo/`。
 API Key 用 AES-GCM 加密后保存（密钥由本机硬件 UUID 派生），文件权限 0600。这样可避免明文落盘，
 也避免未公证的 App 反复弹钥匙串授权；但它不等同于钥匙串或硬件安全模块。
 
@@ -163,4 +164,4 @@ QEVIGO_FEED_URL=http://127.0.0.1:8765/appcast.xml QEVIGO_CHECK_UPDATES_ON_LAUNCH
 
 ## 许可
 
-MIT，见 [LICENSE](LICENSE)。基于 Poptro（MIT）。
+MIT，见 [LICENSE](LICENSE)。

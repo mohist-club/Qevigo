@@ -30,6 +30,12 @@ shopt -s nullglob
 for bundle in "$BIN_DIR"/*.bundle; do cp -R "$bundle" "$APP/Contents/Resources/"; done
 shopt -u nullglob
 
+# MIT requires shipping the license notices with the binary.
+mkdir -p "$APP/Contents/Resources/Licenses"
+cp LICENSE "$APP/Contents/Resources/Licenses/Qevigo.txt"
+cp .build/artifacts/sparkle/Sparkle/LICENSE "$APP/Contents/Resources/Licenses/Sparkle.txt"
+cp .build/checkouts/KeyboardShortcuts/license "$APP/Contents/Resources/Licenses/KeyboardShortcuts.txt"
+
 FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 cp -R "$BIN_DIR/Sparkle.framework" "$FRAMEWORK"
 # Sparkle's XPC services are only needed by sandboxed apps.

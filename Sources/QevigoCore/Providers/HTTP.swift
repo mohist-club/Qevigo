@@ -62,7 +62,8 @@ enum HTTP {
         let failure: TranslationFailure
         switch status {
         case 401, 403: failure = .unauthorized
-        case 402, 456: failure = .quotaExceeded
+        case 402: failure = .paymentRequired
+        case 456: failure = .quotaExceeded
         case 429, 529:
             let retry = response?.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
             failure = .rateLimited(retryAfter: retry)

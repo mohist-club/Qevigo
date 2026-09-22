@@ -101,12 +101,12 @@ public enum ProviderCatalog {
             return ProviderDescriptor(
                 id: id, wire: .openAICompatible, chineseName: "Cerebras", englishName: "Cerebras",
                 symbol: "cpu", defaultBaseURL: "https://api.cerebras.ai/v1",
-                defaultModel: "llama3.1-8b",
-                fallbackModels: ["llama3.1-8b"],
+                defaultModel: "qwen-3.8-27b",
+                fallbackModels: ["qwen-3.8-27b", "gpt-oss-120b"],
                 requiresAPIKey: true, supportsModelDiscovery: true, editableBaseURL: false,
                 keyURL: URL(string: "https://cloud.cerebras.ai"),
-                chineseNote: "速度极快，免费层按 token 计每日额度。可作为故障转移的备用服务。",
-                englishNote: "Extremely fast; the free tier has a daily token allowance. A good failover backup.",
+                chineseNote: "速度极快。免费试用每分钟 5 次、每日 100 万 token，需在控制台激活，适合作为故障转移的备用服务。",
+                englishNote: "Extremely fast. The free trial allows 5 requests/min and 1M tokens/day and must be activated in the console. A good failover backup.",
                 firstTokenTimeout: 6
             )
         case .together:

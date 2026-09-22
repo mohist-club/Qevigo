@@ -24,6 +24,7 @@ public enum TranslationFailure: Equatable, Sendable {
     case unauthorized
     case rateLimited(retryAfter: TimeInterval?)
     case quotaExceeded
+    case paymentRequired
     case timeout
     case network
     case server(Int)
@@ -55,6 +56,7 @@ public struct TranslationError: Error, LocalizedError, Equatable, Sendable {
         case .unauthorized: return tr("API Key 无效或权限不足", "API key is invalid or lacks permission")
         case .rateLimited: return tr("请求过于频繁或额度已用尽 (429)", "Rate limited or quota used up (429)")
         case .quotaExceeded: return tr("额度已用完", "Quota exceeded")
+        case .paymentRequired: return tr("需要开通付费或账户未激活，请到服务商控制台的账单页面查看", "Payment required or account not activated; check the provider's billing page")
         case .timeout: return tr("响应超时", "Timed out")
         case .network: return tr("网络连接失败", "Network connection failed")
         case .server(let code): return tr("服务端错误 (HTTP \(code))", "Server error (HTTP \(code))")
@@ -82,7 +84,7 @@ public struct TranslationError: Error, LocalizedError, Equatable, Sendable {
     public var cooldown: TimeInterval {
         switch failure {
         case .rateLimited(let retryAfter): return min(max(retryAfter ?? 60, 10), 600)
-        case .quotaExceeded: return 3600
+        case .quotaExceeded, .paymentRequired: return 3600
         case .unauthorized, .missingCredentials: return 900
         case .badRequest, .invalidConfiguration: return 300
         case .timeout, .server, .emptyResponse: return 30

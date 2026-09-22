@@ -29,6 +29,7 @@ final class StreamParsingTests: XCTestCase {
         }
         XCTAssertEqual(failure(401), .unauthorized)
         XCTAssertEqual(failure(456), .quotaExceeded)
+        XCTAssertEqual(failure(402), .paymentRequired)
         XCTAssertEqual(failure(429), .rateLimited(retryAfter: nil))
         XCTAssertEqual(failure(503), .server(503))
         XCTAssertEqual(failure(404), .badRequest)

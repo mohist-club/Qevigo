@@ -13,6 +13,8 @@ macOS 菜单栏划词翻译：选中文字，按一下全局快捷键，弹出�
 
 - **划词翻译**：Accessibility 读取选中文字，失败时自动用「模拟 ⌘C 并恢复剪贴板」兜底；没有选中内容时弹出输入框手动翻译
 - **翻译服务**：智谱 GLM、OpenAI、DeepL、Groq、Google AI (Gemini)、Cerebras、Together AI、本地 Ollama、自定义 OpenAI 兼容端点
+  - 有免费额度：智谱 GLM（GLM-4-Flash）、Groq、Google AI、DeepL（每月额度）、本地 Ollama（完全免费）
+  - 需付费：OpenAI、Cerebras（绑卡送 5 美元 / 30 天）、Together AI（最低充值 5 美元）
 - **自动故障转移**：限流 / 额度用尽 / 长时间无响应时切换到下一个服务，出错的服务会被临时跳过
 - **智能方向**：自动识别原文语言（NaturalLanguage，50+ 种），翻成「默认目标语言」，原文已是该语言则翻成「备用语言」
 - **读取可用模型**、**验证并测速**（首字耗时 / 总耗时 / 字符每秒）

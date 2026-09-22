@@ -105,8 +105,8 @@ public enum ProviderCatalog {
                 fallbackModels: ["qwen-3.8-27b", "gpt-oss-120b"],
                 requiresAPIKey: true, supportsModelDiscovery: true, editableBaseURL: false,
                 keyURL: URL(string: "https://cloud.cerebras.ai"),
-                chineseNote: "速度极快。免费试用每分钟 5 次、每日 100 万 token，需在控制台激活，适合作为故障转移的备用服务。",
-                englishNote: "Extremely fast. The free trial allows 5 requests/min and 1M tokens/day and must be activated in the console. A good failover backup.",
+                chineseNote: "速度极快，按量付费。没有长期免费额度：绑定付款方式后赠送 5 美元、30 天内有效；未绑定时调用会返回 402。",
+                englishNote: "Extremely fast, pay as you go. No ongoing free tier: adding a payment method grants $5 valid for 30 days; without one, calls return 402.",
                 firstTokenTimeout: 6
             )
         case .together:
@@ -117,8 +117,8 @@ public enum ProviderCatalog {
                 fallbackModels: ["meta-llama/Llama-3.3-70B-Instruct-Turbo"],
                 requiresAPIKey: true, supportsModelDiscovery: true, editableBaseURL: false,
                 keyURL: URL(string: "https://api.together.ai/settings/api-keys"),
-                chineseNote: "开源模型托管，免费额度与可用模型经常调整，请以「读取可用模型」为准。",
-                englishNote: "Hosted open models. Free quota and models change often; use “Load Available Models”.",
+                chineseNote: "开源模型托管，预付费：没有免费试用，需先充值至少 5 美元才能调用。",
+                englishNote: "Hosted open models, prepaid: no free trial; a minimum $5 credit purchase is required.",
                 firstTokenTimeout: 8
             )
         case .ollama:

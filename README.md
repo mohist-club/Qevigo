@@ -20,7 +20,7 @@ macOS 菜单栏划词翻译：选中文字，按一下全局快捷键，弹出�
 - **读取可用模型**、**验证并测速**（首字耗时 / 总耗时 / 字符每秒）
 - **全局快捷键**：绑定应用、快捷指令、系统操作（锁屏、睡眠等，危险操作二次确认）、Shell / AppleScript / JXA 脚本
 - **SSH 服务器**：从 `~/.ssh/config` 读取主机列表，一个快捷键连上；可选用系统终端或 VS Code Remote-SSH 打开，并能一键运行 `ssh-copy-id` 配置免密登录（密码只在终端里输一次，Qevigo 不保存）
-- **OpenVPN**：在设置里选择 `.ovpn` 配置文件，一个快捷键连接 / 断开。使用 `openvpn` 命令行（`brew install openvpn`，不需要图形客户端）。建隧道需要管理员权限，可一键在终端里配置一次免密（规则写在 `/etc/sudoers.d/qevigo-openvpn`，与实际执行的命令逐字匹配），之后按快捷键直接连接
+- **OpenVPN**：在设置里选择 `.ovpn` 配置文件，一个快捷键连接 / 断开（同一个配置只会有一条隧道；断不开时会按配置路径强制结束）。使用 `openvpn` 命令行（`brew install openvpn`，不需要图形客户端）。建隧道需要管理员权限，可一键在终端里配置一次免密（规则写在 `/etc/sudoers.d/qevigo-openvpn`，与实际执行的命令逐字匹配），之后按快捷键直接连接
 - 浮窗可拖动、缩放、记住位置和大小、可锁定；朗读、复制、互换语言；浅色 / 深色 / 自动；中英文界面
 - 检测到旧版配置时可一键导入（服务、API Key、快捷键、偏好）：设置 → 高级
 
@@ -94,6 +94,20 @@ Tests/QevigoCoreTests/
 - 新请求会取消旧请求，过期结果不会写进界面。
 - 过滤 Qwen3 / DeepSeek 等模型输出的 `<think>…</think>`，不会混进译文。
 - Gemini 的 API Key 放在请求头，不会出现在 URL 里。
+
+## 出问题时断开 VPN
+
+VPN 隧道会接管系统路由。万一 Qevigo 不在手边或界面没反应，在终端里直接结束它即可恢复上网：
+
+```bash
+sudo pkill -TERM openvpn
+```
+
+如果路由仍不正常，关掉再打开 Wi-Fi 会重新获取路由：
+
+```bash
+networksetup -setairportpower en0 off && sleep 2 && networksetup -setairportpower en0 on
+```
 
 ## 数据
 

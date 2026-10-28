@@ -516,3 +516,34 @@ final class OpenVPNDiagnosticsTests: XCTestCase {
         XCTAssertEqual(OpenVPN.readyMarker, "Initialization Sequence Completed")
     }
 }
+
+final class OpenVPNSafetyTests: XCTestCase {
+    private let config = "/Users/wayne/.qevigo/vpn/SG-VPN.ovpn"
+
+    func testProcessLookupMatchesTheConfigPath() {
+        let spec = OpenVPN.findProcessesSpec(config: config)
+        XCTAssertEqual(spec.executable, "/usr/bin/pgrep")
+        XCTAssertEqual(spec.arguments, ["-f", "--", config], "-- stops a path being read as options")
+    }
+
+    func testForceDisconnectMatchesTheConfigPath() {
+        let spec = OpenVPN.forceDisconnectSpec(config: config, interactive: false)
+        XCTAssertEqual(spec.arguments, ["-n", "/usr/bin/pkill", "-TERM", "-f", "--", config])
+    }
+
+    func testSudoersAllowsBothWaysToStop() {
+        let file = OpenVPN.sudoersFile(user: "wayne", binary: "/opt/homebrew/sbin/openvpn", configs: [config])
+        XCTAssertTrue(file.contains("/usr/bin/pkill -TERM -F /Users/wayne/.qevigo/vpn/SG-VPN.pid"),
+                      "normal stop, by pid file")
+        XCTAssertTrue(file.contains("/usr/bin/pkill -TERM -f -- /Users/wayne/.qevigo/vpn/SG-VPN.ovpn"),
+                      "fallback stop, when the pid file is gone")
+    }
+
+    func testEveryRuleStaysExactWithNoWildcards() {
+        let file = OpenVPN.sudoersFile(user: "wayne", binary: "/opt/homebrew/sbin/openvpn", configs: [config])
+        for line in file.split(whereSeparator: \.isNewline) where line.contains("NOPASSWD") {
+            XCTAssertFalse(line.contains("*"), "a wildcard would widen what runs as root: \(line)")
+            XCTAssertFalse(line.contains("ALL\n"), "no blanket command permission")
+        }
+    }
+}

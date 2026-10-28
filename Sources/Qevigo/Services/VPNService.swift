@@ -29,7 +29,19 @@ enum VPNService {
 
     /// One hotkey connects and disconnects: pressing it again takes the tunnel down.
     static func toggle(_ binding: LaunchBinding) {
+        Task { await toggleChecked(binding) }
+    }
+
+    /// Asks the system for running tunnels before deciding. Starting a second
+    /// openvpn for the same configuration would add a second set of default
+    /// routes and take the whole machine offline, so a tunnel that is running
+    /// is always stopped rather than started again.
+    private static func toggleChecked(_ binding: LaunchBinding) async {
         let config = binding.payload
+        if await isRunning(config: config), status(configPath: config) != .notInstalled {
+            disconnect(binding)
+            return
+        }
         switch status(configPath: config) {
         case .notInstalled:
             present(tr(
@@ -42,9 +54,7 @@ enum VPNService {
                 "Configuration file not found: \(config). Add the VPN again in Settings → Shortcuts."
             ))
         case .connected:
-            run(OpenVPN.disconnectSpec(config: config, interactive: false),
-                fallback: OpenVPN.disconnectSpec(config: config, interactive: true),
-                describing: tr("断开 \(binding.name)", "Disconnecting \(binding.name)"))
+            disconnect(binding)
         case .disconnected:
             guard let binary = OpenVPN.installedBinary() else { return }
             prepareOutputFiles(config: config)
@@ -52,6 +62,40 @@ enum VPNService {
                 fallback: OpenVPN.connectSpec(binary: binary, config: config, interactive: true),
                 describing: tr("连接 \(binding.name)", "Connecting \(binding.name)"),
                 waitForTunnel: config)
+        }
+    }
+
+    /// True when any openvpn process is using this configuration, pid file or not.
+    static func isRunning(config: String) async -> Bool {
+        guard let output = try? await ActionLauncher.runSpec(OpenVPN.findProcessesSpec(config: config)) else {
+            // pgrep exits non-zero when nothing matches.
+            return OpenVPN.isConnected(config: config)
+        }
+        return !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Stops the tunnel, falling back to matching the configuration path when
+    /// the pid file is missing — otherwise a stray tunnel could not be stopped
+    /// from the app at all.
+    private static func disconnect(_ binding: LaunchBinding) {
+        let config = binding.payload
+        let action = tr("断开 \(binding.name)", "Disconnecting \(binding.name)")
+        Task {
+            do {
+                _ = try await ActionLauncher.runSpec(OpenVPN.disconnectSpec(config: config, interactive: false))
+            } catch {
+                if (try? await ActionLauncher.runSpec(OpenVPN.forceDisconnectSpec(config: config, interactive: false))) == nil {
+                    openInTerminal(OpenVPN.forceDisconnectSpec(config: config, interactive: true), note: tr(
+                        "请在终端里输入你的 Mac 密码以\(action)。",
+                        "Enter your Mac password in Terminal to continue."
+                    ))
+                    return
+                }
+            }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if await isRunning(config: config) {
+                _ = try? await ActionLauncher.runSpec(OpenVPN.forceDisconnectSpec(config: config, interactive: false))
+            }
         }
     }
 

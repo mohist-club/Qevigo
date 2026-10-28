@@ -60,6 +60,21 @@ public enum OpenVPN {
         )
     }
 
+    /// Lists openvpn processes started with this configuration. Works without
+    /// root, so it can be trusted even when the pid file is gone.
+    public static func findProcessesSpec(config: String) -> ShortcutExecutionSpec {
+        ShortcutExecutionSpec(executable: "/usr/bin/pgrep", arguments: ["-f", "--", config])
+    }
+
+    /// Stops the tunnel by matching the configuration path. Used when the pid
+    /// file is missing, which is exactly when a stray tunnel is hardest to kill.
+    public static func forceDisconnectSpec(config: String, interactive: Bool) -> ShortcutExecutionSpec {
+        ShortcutExecutionSpec(
+            executable: "/usr/bin/sudo",
+            arguments: (interactive ? [] : ["-n"]) + ["/usr/bin/pkill", "-TERM", "-f", "--", config]
+        )
+    }
+
     public static func disconnectSpec(config: String, interactive: Bool) -> ShortcutExecutionSpec {
         let arguments = ["/usr/bin/pkill", "-TERM", "-F", pidPath(forConfig: config)]
         return ShortcutExecutionSpec(
@@ -123,10 +138,12 @@ public enum OpenVPN {
                 .map(escapeForSudoers)
                 .joined(separator: " ")
             lines.append("\(user) ALL=(root) NOPASSWD: \(connect)")
-            let disconnect = ["/usr/bin/pkill", "-TERM", "-F", pidPath(forConfig: config)]
-                .map(escapeForSudoers)
-                .joined(separator: " ")
-            lines.append("\(user) ALL=(root) NOPASSWD: \(disconnect)")
+            for stop in [
+                ["/usr/bin/pkill", "-TERM", "-F", pidPath(forConfig: config)],
+                ["/usr/bin/pkill", "-TERM", "-f", "--", config]
+            ] {
+                lines.append("\(user) ALL=(root) NOPASSWD: \(stop.map(escapeForSudoers).joined(separator: " "))")
+            }
         }
         return lines.joined(separator: "\n") + "\n"
     }

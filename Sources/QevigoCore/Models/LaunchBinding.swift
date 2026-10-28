@@ -1,7 +1,7 @@
 import Foundation
 
 public enum ShortcutActionKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case application, shortcut, system, script, ssh
+    case application, shortcut, system, script, ssh, vpn
 
     public var id: String { rawValue }
 }
@@ -110,6 +110,10 @@ public extension LaunchBinding {
             return nil
         case .ssh:
             return sshSpec
+        case .vpn:
+            // Needs the openvpn binary and the current connection state, so the
+            // app layer builds this one.
+            return nil
         case .shortcut:
             return ShortcutExecutionSpec(executable: "/usr/bin/shortcuts", arguments: ["run", payload])
         case .script:
@@ -164,7 +168,7 @@ public extension LaunchBinding {
 
     /// True when `executionSpec` cannot be built without asking the server for
     /// its home directory.
-    public var needsRemoteHome: Bool {
+    var needsRemoteHome: Bool {
         kind == .ssh && (sshOpener ?? .terminal) == .visualStudioCode
             && Self.resolvedRemotePath(sshRemotePath, home: nil) == nil
     }

@@ -9,7 +9,7 @@ private enum ShortcutRowID: Hashable {
 }
 
 private enum AddSheet: String, Identifiable {
-    case application, shortcut, system, script, ssh
+    case application, shortcut, system, script, ssh, vpn
     var id: String { rawValue }
 }
 
@@ -58,6 +58,7 @@ struct ShortcutsTab: View {
                         Button { sheet = .system } label: { Label(tr("系统操作…", "System Action…"), systemImage: "gearshape.2") }
                         Button { sheet = .script } label: { Label(tr("脚本…", "Script…"), systemImage: "terminal") }
                         Button { sheet = .ssh } label: { Label(tr("SSH 服务器…", "SSH Server…"), systemImage: "server.rack") }
+                        Button { sheet = .vpn } label: { Label(tr("VPN 配置…", "VPN Configuration…"), systemImage: "lock.shield") }
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -86,6 +87,7 @@ struct ShortcutsTab: View {
             case .system: SystemActionPicker { add($0) }
             case .script: ScriptEditor { add($0) }
             case .ssh: SSHServerPicker { add($0) }
+            case .vpn: VPNConfigPicker(existing: store.bindings) { add($0) }
             }
         }
     }
@@ -102,6 +104,7 @@ struct ShortcutsTab: View {
 
     private func removeSelected() {
         guard let binding = selectedBinding else { return }
+        if binding.kind == .vpn { VPNConfigStore.remove(configPath: binding.payload) }
         KeyboardShortcuts.reset(KeyboardShortcuts.Name(binding.hotkeyName))
         store.bindings.removeAll { $0.id == binding.id }
         selection = nil
@@ -138,6 +141,8 @@ struct ShortcutsTab: View {
             return AnyView(Image(systemName: "terminal").resizable().scaledToFit().foregroundStyle(.secondary))
         case .ssh:
             return AnyView(Image(systemName: "server.rack").resizable().scaledToFit().foregroundStyle(.secondary))
+        case .vpn:
+            return AnyView(Image(systemName: "lock.shield").resizable().scaledToFit().foregroundStyle(.secondary))
         }
     }
 
@@ -146,6 +151,8 @@ struct ShortcutsTab: View {
         case .application: return tr("打开 / 隐藏应用", "Open / Hide Application")
         case .shortcut: return tr("运行快捷指令", "Run Shortcut")
         case .system: return tr("系统操作", "System Action")
+        case .vpn:
+            return tr("OpenVPN · 按快捷键连接或断开", "OpenVPN · press to connect or disconnect")
         case .ssh:
             let opener = (binding.sshOpener ?? .terminal).localizedName
             return tr("SSH · \(binding.payload) · \(opener)", "SSH · \(binding.payload) · \(opener)")

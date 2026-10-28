@@ -36,6 +36,8 @@ enum ActionLauncher {
             }
         case .ssh:
             connect(binding)
+        case .vpn:
+            VPNService.toggle(binding)
         }
     }
 
@@ -164,6 +166,8 @@ enum ActionLauncher {
             ]))
         }
     }
+
+    static func runSpec(_ spec: ShortcutExecutionSpec) async throws -> String { try await run(spec) }
 
     private static func run(_ spec: ShortcutExecutionSpec) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in

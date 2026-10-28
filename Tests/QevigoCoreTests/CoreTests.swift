@@ -415,3 +415,68 @@ final class SSHPublicKeyTests: XCTestCase {
         XCTAssertEqual(SSHPublicKey.available(in: dir.path).first?.fileName, "id_ed25519.pub")
     }
 }
+
+final class OpenVPNTests: XCTestCase {
+    private let binary = "/opt/homebrew/sbin/openvpn"
+    private let config = "/Users/wayne/.qevigo/vpn/office.ovpn"
+
+    func testConnectCommandIsFixedAndPinsScriptSecurity() {
+        let spec = OpenVPN.connectSpec(binary: binary, config: config, interactive: false)
+        XCTAssertEqual(spec.executable, "/usr/bin/sudo")
+        XCTAssertEqual(spec.arguments.first, "-n", "non-interactive runs must not block on a password prompt")
+        XCTAssertTrue(spec.arguments.contains(binary))
+        XCTAssertEqual(spec.arguments.last, "/Users/wayne/.qevigo/vpn/office.log")
+        // --script-security must come after --config so a tampered config cannot raise it.
+        let securityIndex = try! XCTUnwrap(spec.arguments.firstIndex(of: "--script-security"))
+        let configIndex = try! XCTUnwrap(spec.arguments.firstIndex(of: "--config"))
+        XCTAssertLessThan(configIndex, securityIndex)
+        XCTAssertEqual(spec.arguments[securityIndex + 1], "1")
+
+        let interactive = OpenVPN.connectSpec(binary: binary, config: config, interactive: true)
+        XCTAssertNotEqual(interactive.arguments.first, "-n", "interactive runs may ask for the password")
+    }
+
+    func testDisconnectUsesThePidFile() {
+        let spec = OpenVPN.disconnectSpec(config: config, interactive: false)
+        XCTAssertEqual(spec.arguments, ["-n", "/usr/bin/pkill", "-TERM", "-F", "/Users/wayne/.qevigo/vpn/office.pid"])
+    }
+
+    func testSudoersRulesMatchTheLaunchCommandExactly() {
+        let file = OpenVPN.sudoersFile(user: "wayne", binary: binary, configs: [config])
+        let launch = OpenVPN.connectArguments(binary: binary, config: config).joined(separator: " ")
+        XCTAssertTrue(file.contains("wayne ALL=(root) NOPASSWD: " + launch), "rule must match what Qevigo runs")
+        XCTAssertTrue(file.contains("/usr/bin/pkill -TERM -F /Users/wayne/.qevigo/vpn/office.pid"))
+        XCTAssertTrue(file.hasSuffix("\n"))
+    }
+
+    func testSudoersEscapesSpecialCharacters() {
+        XCTAssertEqual(OpenVPN.escapeForSudoers("/a/Application Support/x"), "/a/Application\\ Support/x")
+        XCTAssertEqual(OpenVPN.escapeForSudoers("a:b,c=d#e"), "a\\:b\\,c\\=d\\#e")
+        XCTAssertEqual(OpenVPN.escapeForSudoers("/plain/path"), "/plain/path")
+    }
+
+    func testConnectionStateFollowsThePidFile() {
+        XCTAssertTrue(OpenVPN.isConnected(config: config, readPID: { _ in "4242\n" }, isRunning: { $0 == 4242 }))
+        XCTAssertFalse(OpenVPN.isConnected(config: config, readPID: { _ in "4242" }, isRunning: { _ in false }), "stale pid file")
+        XCTAssertFalse(OpenVPN.isConnected(config: config, readPID: { _ in nil }, isRunning: { _ in true }), "no pid file")
+        XCTAssertFalse(OpenVPN.isConnected(config: config, readPID: { _ in "not a pid" }, isRunning: { _ in true }))
+    }
+
+    func testConfigNameValidation() {
+        XCTAssertTrue(OpenVPN.isValidConfigName("office-vpn_2"))
+        for bad in ["", " ", ".hidden", "with space", "a/b", "a;b", "名称", String(repeating: "x", count: 61)] {
+            XCTAssertFalse(OpenVPN.isValidConfigName(bad), "should reject \(bad)")
+        }
+    }
+
+    func testBinaryLookupPrefersHomebrew() {
+        XCTAssertEqual(OpenVPN.installedBinary(checking: { $0 == "/usr/local/sbin/openvpn" }), "/usr/local/sbin/openvpn")
+        XCTAssertNil(OpenVPN.installedBinary(checking: { _ in false }))
+    }
+
+    func testDerivedPaths() {
+        XCTAssertEqual(OpenVPN.pidPath(forConfig: config), "/Users/wayne/.qevigo/vpn/office.pid")
+        XCTAssertEqual(OpenVPN.logPath(forConfig: config), "/Users/wayne/.qevigo/vpn/office.log")
+        XCTAssertTrue(OpenVPN.configPath(name: "office").hasSuffix("/.qevigo/vpn/office.ovpn"))
+    }
+}

@@ -177,6 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .system: image = NSImage(systemSymbolName: "gearshape.2", accessibilityDescription: nil)
         case .script: image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
         case .ssh: image = NSImage(systemSymbolName: "server.rack", accessibilityDescription: nil)
+        case .vpn: image = NSImage(systemSymbolName: "lock.shield", accessibilityDescription: nil)
         }
         image?.size = NSSize(width: 16, height: 16)
         return image

@@ -17,6 +17,7 @@ struct VPNConfigPicker: View {
     @State private var sudoersInstalled = VPNService.hasPasswordlessRules
     @State private var engineNote: String?
     @State private var engineTick = 0
+    @State private var rulesCurrent = true
 
     private var binaryPath: String? { VPNService.binary() }
     private var brewPath: String? { OpenVPN.installedBrew() }
@@ -94,8 +95,18 @@ struct VPNConfigPicker: View {
 
                 LabeledContent(tr("免密连接", "Passwordless")) {
                     VStack(alignment: .leading, spacing: 5) {
-                        if sudoersInstalled {
+                        if sudoersInstalled, rulesCurrent {
                             StatusChip(title: tr("已配置", "Configured"), isGood: true)
+                        } else if sudoersInstalled {
+                            VStack(alignment: .leading, spacing: 4) {
+                                StatusChip(title: tr("需要更新", "Needs updating"), isGood: false)
+                                Text(tr(
+                                    "现有免密规则是为其他配置生成的，对当前这些 VPN 不生效。添加后会自动重新生成。",
+                                    "The existing rules were written for other configurations and do not cover these VPNs. They are rewritten when you add this one."
+                                ))
+                                .font(.caption).foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 360, alignment: .leading)
+                            }
                         } else {
                             StatusChip(title: tr("未配置", "Not configured"), isGood: false)
                         }
@@ -119,13 +130,17 @@ struct VPNConfigPicker: View {
             footer
         }
         .frame(width: 560)
-        .onAppear { sudoersInstalled = VPNService.hasPasswordlessRules }
+        .onAppear {
+            sudoersInstalled = VPNService.hasPasswordlessRules
+            rulesCurrent = VPNService.rulesCover(bindings: existing)
+        }
         .id(engineTick)
         .task {
             // The install runs in Terminal, so watch for the binary appearing.
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 sudoersInstalled = VPNService.hasPasswordlessRules
+                rulesCurrent = VPNService.rulesCover(bindings: existing)
                 engineTick += 1
             }
         }

@@ -35,6 +35,18 @@ enum VPNService {
         FileManager.default.fileExists(atPath: OpenVPN.sudoersPath)
     }
 
+    /// Rules name exact configuration paths, so a renamed or newly added VPN
+    /// is not covered by rules written earlier.
+    static func rulesCover(bindings: [LaunchBinding]) -> Bool {
+        guard hasPasswordlessRules, let binary = binary() else { return false }
+        let marker = try? String(contentsOfFile: OpenVPN.rulesMarkerPath, encoding: .utf8)
+        return OpenVPN.rulesCover(
+            binary: binary,
+            configs: VPNConfigStore.managedConfigs(in: bindings),
+            marker: marker
+        )
+    }
+
     /// One hotkey connects and disconnects: pressing it again takes the tunnel down.
     static func toggle(_ binding: LaunchBinding) {
         Task { await toggleChecked(binding) }
@@ -232,12 +244,15 @@ enum VPNConfigStore {
     /// Writes the rules to a temporary file and returns the Terminal command
     /// that validates and installs them. Qevigo never writes to /etc itself.
     static func sudoersInstallCommand(for bindings: [LaunchBinding]) -> String? {
-        guard let binary = OpenVPN.installedBinary() else { return nil }
+        guard let binary = VPNService.binary() else { return nil }
         let configs = managedConfigs(in: bindings)
         guard !configs.isEmpty else { return nil }
         let contents = OpenVPN.sudoersFile(user: NSUserName(), binary: binary, configs: configs)
         let staged = (NSTemporaryDirectory() as NSString).appendingPathComponent("qevigo-openvpn.sudoers")
-        guard (try? contents.write(toFile: staged, atomically: true, encoding: .utf8)) != nil else { return nil }
-        return OpenVPN.installSudoersCommand(stagedFile: staged)
+        let stagedMarker = (NSTemporaryDirectory() as NSString).appendingPathComponent("qevigo-openvpn.marker")
+        let marker = OpenVPN.rulesMarker(binary: binary, configs: configs)
+        guard (try? contents.write(toFile: staged, atomically: true, encoding: .utf8)) != nil,
+              (try? marker.write(toFile: stagedMarker, atomically: true, encoding: .utf8)) != nil else { return nil }
+        return OpenVPN.installSudoersCommand(stagedFile: staged, marker: stagedMarker)
     }
 }

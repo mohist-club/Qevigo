@@ -590,3 +590,39 @@ final class OpenVPNInstallTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(AppPreferences.self, from: Data("{}".utf8)).openvpnPath, "")
     }
 }
+
+final class OpenVPNRuleFreshnessTests: XCTestCase {
+    private let binary = "/opt/homebrew/sbin/openvpn"
+    private let office = "/Users/wayne/.qevigo/vpn/office.ovpn"
+    private let home = "/Users/wayne/.qevigo/vpn/home.ovpn"
+
+    func testRulesCoverExactlyTheConfigsTheyWereWrittenFor() {
+        let marker = OpenVPN.rulesMarker(binary: binary, configs: [office])
+        XCTAssertTrue(OpenVPN.rulesCover(binary: binary, configs: [office], marker: marker))
+        // Renaming a config, which is what silently broke passwordless connects.
+        XCTAssertFalse(OpenVPN.rulesCover(binary: binary, configs: [home], marker: marker))
+        // Adding a second VPN also needs new rules.
+        XCTAssertFalse(OpenVPN.rulesCover(binary: binary, configs: [office, home], marker: marker))
+        // So does moving to a different openvpn build.
+        XCTAssertFalse(OpenVPN.rulesCover(binary: "/opt/local/sbin/openvpn", configs: [office], marker: marker))
+    }
+
+    func testMarkerIgnoresOrdering() {
+        XCTAssertEqual(
+            OpenVPN.rulesMarker(binary: binary, configs: [office, home]),
+            OpenVPN.rulesMarker(binary: binary, configs: [home, office])
+        )
+    }
+
+    func testMissingMarkerMeansNotCovered() {
+        XCTAssertFalse(OpenVPN.rulesCover(binary: binary, configs: [office], marker: nil))
+        XCTAssertFalse(OpenVPN.rulesCover(binary: binary, configs: [], marker: "anything"))
+    }
+
+    func testInstallCommandWritesTheMarkerAndRemovalClearsIt() {
+        let command = OpenVPN.installSudoersCommand(stagedFile: "/tmp/staged", marker: "/tmp/marker")
+        XCTAssertTrue(command.contains("visudo -cf /tmp/staged"), "rules are validated before install")
+        XCTAssertTrue(command.contains("cp /tmp/marker \(OpenVPN.rulesMarkerPath)"))
+        XCTAssertTrue(OpenVPN.removeSudoersCommand().contains("rm -f \(OpenVPN.rulesMarkerPath)"))
+    }
+}

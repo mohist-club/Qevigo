@@ -480,3 +480,39 @@ final class OpenVPNTests: XCTestCase {
         XCTAssertTrue(OpenVPN.configPath(name: "office").hasSuffix("/.qevigo/vpn/office.ovpn"))
     }
 }
+
+final class OpenVPNDiagnosticsTests: XCTestCase {
+    func testRootOwnedProcessCountsAsRunning() {
+        // kill(pid, 0) answers EPERM for a live root process; only ESRCH means gone.
+        XCTAssertTrue(OpenVPN.processExists(1), "launchd is always running and owned by root")
+        XCTAssertFalse(OpenVPN.processExists(Int32.max - 1), "no such process")
+    }
+
+    func testIsConnectedUsesTheSameRule() {
+        let config = "/Users/wayne/.qevigo/vpn/office.ovpn"
+        XCTAssertTrue(OpenVPN.isConnected(config: config, readPID: { _ in "1" }), "root-owned openvpn is connected")
+    }
+
+    func testFailureSummaryPicksTheMeaningfulLines() {
+        let log = """
+        2026-10-28 17:07:01 OpenVPN 2.7.8 aarch64-apple-darwin27.0.0
+        2026-10-28 17:07:01 library versions: OpenSSL 4.1.0
+        2026-10-28 17:07:02 RESOLVE: Cannot resolve host address: vpn.example.com
+        2026-10-28 17:07:02 Exiting due to fatal error
+        """
+        let summary = OpenVPN.failureSummary(log: log)
+        XCTAssertTrue(summary.contains("Cannot resolve host address"))
+        XCTAssertTrue(summary.contains("fatal error"))
+        XCTAssertFalse(summary.contains("library versions"), "noise is left out")
+        XCTAssertFalse(summary.contains("2026-10-28"), "timestamps are stripped")
+    }
+
+    func testFailureSummaryFallsBackToTheLastLines() {
+        let log = (1...10).map { "line \($0)" }.joined(separator: "\n")
+        XCTAssertEqual(OpenVPN.failureSummary(log: log, limit: 2), "line 9\nline 10")
+    }
+
+    func testReadyMarkerIsTheOpenVPNSuccessLine() {
+        XCTAssertEqual(OpenVPN.readyMarker, "Initialization Sequence Completed")
+    }
+}

@@ -69,14 +69,42 @@ public enum OpenVPN {
     }
 
     /// True when the pid file names a process that is still alive.
+    /// openvpn runs as root, so `kill(pid, 0)` from the user's process answers
+    /// EPERM for a live tunnel. Only ESRCH means the process is gone.
+    public static func processExists(_ pid: Int32) -> Bool {
+        if kill(pid, 0) == 0 { return true }
+        return errno == EPERM
+    }
+
     public static func isConnected(
         config: String,
         readPID: (String) -> String? = { try? String(contentsOfFile: $0, encoding: .utf8) },
-        isRunning: (Int32) -> Bool = { kill($0, 0) == 0 }
+        isRunning: (Int32) -> Bool = processExists
     ) -> Bool {
         guard let raw = readPID(pidPath(forConfig: config)),
               let pid = Int32(raw.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
         return isRunning(pid)
+    }
+
+    /// openvpn prints this once the tunnel is up and routes are in place.
+    public static let readyMarker = "Initialization Sequence Completed"
+
+    /// Lines worth showing when a connection fails; the rest of the log is noise.
+    public static func failureSummary(log: String, limit: Int = 4) -> String {
+        let interesting = log.split(whereSeparator: \.isNewline)
+            .map(String.init)
+            .filter { line in
+                let lower = line.lowercased()
+                return ["error", "fatal", "fail", "cannot", "denied", "refused", "timeout", "auth"]
+                    .contains { lower.contains($0) }
+            }
+        let chosen = interesting.isEmpty
+            ? log.split(whereSeparator: \.isNewline).suffix(limit).map(String.init)
+            : Array(interesting.suffix(limit))
+        // Timestamps add width without adding meaning in an alert.
+        return chosen
+            .map { $0.replacingOccurrences(of: #"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} "#, with: "", options: .regularExpression) }
+            .joined(separator: "\n")
     }
 
     public static let sudoersPath = "/etc/sudoers.d/qevigo-openvpn"

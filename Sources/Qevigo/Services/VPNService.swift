@@ -47,11 +47,22 @@ enum VPNService {
                 describing: tr("断开 \(binding.name)", "Disconnecting \(binding.name)"))
         case .disconnected:
             guard let binary = OpenVPN.installedBinary() else { return }
+            prepareOutputFiles(config: config)
             run(OpenVPN.connectSpec(binary: binary, config: config, interactive: false),
                 fallback: OpenVPN.connectSpec(binary: binary, config: config, interactive: true),
                 describing: tr("连接 \(binding.name)", "Connecting \(binding.name)"),
-                verify: { status(configPath: config) == .connected },
-                logPath: OpenVPN.logPath(forConfig: config))
+                waitForTunnel: config)
+        }
+    }
+
+    /// Creates the log and pid files up front, owned by the user. openvpn runs
+    /// as root and would otherwise create them root-only, leaving the user
+    /// unable to read why a connection failed.
+    private static func prepareOutputFiles(config: String) {
+        let manager = FileManager.default
+        for path in [OpenVPN.logPath(forConfig: config), OpenVPN.pidPath(forConfig: config)] {
+            try? manager.removeItem(atPath: path)
+            manager.createFile(atPath: path, contents: Data(), attributes: [.posixPermissions: 0o600])
         }
     }
 
@@ -61,22 +72,12 @@ enum VPNService {
         _ spec: ShortcutExecutionSpec,
         fallback: ShortcutExecutionSpec,
         describing action: String,
-        verify: (() -> Bool)? = nil,
-        logPath: String? = nil
+        waitForTunnel config: String? = nil
     ) {
         Task {
             do {
                 _ = try await ActionLauncher.runSpec(spec)
-                // openvpn forks before the tunnel is up; give it a moment.
-                if let verify {
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                    if !verify() {
-                        present(tr(
-                            "\(action)失败。\(logPath.map { "详情见 \($0)" } ?? "")",
-                            "\(action) failed. \(logPath.map { "See \($0)" } ?? "")"
-                        ))
-                    }
-                }
+                if let config { await reportOutcome(config: config, action: action) }
             } catch {
                 openInTerminal(fallback, note: tr(
                     "请在终端里输入你的 Mac 密码以\(action)。",
@@ -84,6 +85,29 @@ enum VPNService {
                 ))
             }
         }
+    }
+
+    /// openvpn daemonises immediately, so success is judged by the log: it
+    /// prints a known line once the tunnel and its routes are up.
+    private static func reportOutcome(config: String, action: String) async {
+        let logPath = OpenVPN.logPath(forConfig: config)
+        for _ in 0..<40 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            let log = (try? String(contentsOfFile: logPath, encoding: .utf8)) ?? ""
+            if log.contains(OpenVPN.readyMarker) { return }
+            // The daemon exits on a fatal error, so a dead process means failure.
+            if !log.isEmpty, !OpenVPN.isConnected(config: config) {
+                present(tr(
+                    "\(action)失败：\n\n\(OpenVPN.failureSummary(log: log))",
+                    "\(action) failed:\n\n\(OpenVPN.failureSummary(log: log))"
+                ))
+                return
+            }
+        }
+        present(tr(
+            "\(action)超时（20 秒内没有建立隧道）。日志：\(logPath)",
+            "\(action) timed out after 20s. Log: \(logPath)"
+        ))
     }
 
     /// Runs a command in Terminal, where sudo can prompt for a password.

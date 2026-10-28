@@ -58,10 +58,6 @@ struct AdvancedTab: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                 }
-                FormNote(tr(
-                    "同时决定翻译窗口和快捷键提示层的通透程度。",
-                    "Sets how see-through both the translation window and the shortcut overlay are."
-                ))
 
                 Divider().padding(.vertical, 6)
 

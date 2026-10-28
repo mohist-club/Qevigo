@@ -16,11 +16,11 @@ struct VPNConfigPicker: View {
     @State private var installedConfig: String?
     @State private var sudoersInstalled = VPNService.hasPasswordlessRules
     @State private var engineNote: String?
-    @State private var engineTick = 0
+    @State private var enginePath: String?
     @State private var rulesCurrent = true
     @StateObject private var installer = VPNEngineInstaller()
 
-    private var binaryPath: String? { VPNService.binary() }
+    private var binaryPath: String? { enginePath }
     private var brewPath: String? { OpenVPN.installedBrew() }
     private var installButtonTitle: String {
         brewPath == nil
@@ -160,21 +160,17 @@ struct VPNConfigPicker: View {
             footer
         }
         .frame(width: 560)
-        .onAppear {
-            sudoersInstalled = VPNService.hasPasswordlessRules
-            rulesCurrent = VPNService.rulesCover(bindings: existing)
-        }
-        .id(engineTick)
+        .onAppear { refreshStatus() }
         .onChange(of: installer.state) { _, state in
-            if case .installed = state { engineTick += 1 }
+            if case .installed(let path) = state { enginePath = path }
         }
         .task {
-            // The install runs in Terminal, so watch for the binary appearing.
-            while !Task.isCancelled {
+            // The engine can appear while this sheet is open, because it is
+            // installed from Terminal. Watch for it, but only until it shows up:
+            // refreshing state in place keeps the name field's focus.
+            while !Task.isCancelled, enginePath == nil {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-                sudoersInstalled = VPNService.hasPasswordlessRules
-                rulesCurrent = VPNService.rulesCover(bindings: existing)
-                engineTick += 1
+                refreshStatus()
             }
         }
     }
@@ -214,6 +210,12 @@ struct VPNConfigPicker: View {
         .padding(12)
     }
 
+    private func refreshStatus() {
+        enginePath = VPNService.binary()
+        sudoersInstalled = VPNService.hasPasswordlessRules
+        rulesCurrent = VPNService.rulesCover(bindings: existing)
+    }
+
     private func installEngine() {
         engineNote = tr(
             "正在终端里安装，完成后这里会自动变成「已就绪」。",
@@ -237,7 +239,7 @@ struct VPNConfigPicker: View {
             if OpenVPN.isOpenVPNVersionOutput(output) {
                 AppEnvironment.shared.settings.preferences.openvpnPath = url.path
                 engineNote = nil
-                engineTick += 1
+                refreshStatus()
             } else {
                 engineNote = tr(
                     "这个文件不是 openvpn 客户端。",

@@ -9,7 +9,7 @@ final class ShortcutHUD {
 
     private var panel: NSPanel?
     private var dismissal: DispatchWorkItem?
-    private static let side: CGFloat = 190
+    private static let side: CGFloat = 148
 
     private init() {}
 
@@ -22,7 +22,9 @@ final class ShortcutHUD {
         place(panel)
 
         dismissal?.cancel()
-        panel.alphaValue = 1
+        // Follows the glass transparency in settings, so it can be tuned there.
+        let transparency = AppEnvironment.shared.settings.preferences.glassTransparency
+        panel.alphaValue = min(max(1 - transparency * 0.5, 0.45), 0.95)
         panel.orderFrontRegardless()
 
         let work = DispatchWorkItem { [weak panel] in
@@ -84,7 +86,7 @@ private final class HUDContentView: NSView {
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             glass.style = .clear
-            glass.cornerRadius = 22
+            glass.cornerRadius = 18
             background = glass
         } else {
             let effect = NSVisualEffectView()
@@ -92,7 +94,7 @@ private final class HUDContentView: NSView {
             effect.blendingMode = .behindWindow
             effect.state = .active
             effect.wantsLayer = true
-            effect.layer?.cornerRadius = 22
+            effect.layer?.cornerRadius = 18
             effect.layer?.cornerCurve = .continuous
             effect.layer?.masksToBounds = true
             background = effect
@@ -106,12 +108,12 @@ private final class HUDContentView: NSView {
         symbolView.contentTintColor = .labelColor
 
         titleLabel.alignment = .center
-        titleLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
 
         subtitleLabel.alignment = .center
-        subtitleLabel.font = .systemFont(ofSize: 12)
+        subtitleLabel.font = .systemFont(ofSize: 11)
         subtitleLabel.textColor = .secondaryLabelColor
         subtitleLabel.lineBreakMode = .byTruncatingTail
         subtitleLabel.maximumNumberOfLines = 1
@@ -131,16 +133,16 @@ private final class HUDContentView: NSView {
         }
         NSLayoutConstraint.activate([
             symbolView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            symbolView.topAnchor.constraint(equalTo: topAnchor, constant: 38),
-            symbolView.widthAnchor.constraint(equalToConstant: 68),
-            symbolView.heightAnchor.constraint(equalToConstant: 68),
+            symbolView.topAnchor.constraint(equalTo: topAnchor, constant: 28),
+            symbolView.widthAnchor.constraint(equalToConstant: 52),
+            symbolView.heightAnchor.constraint(equalToConstant: 52),
 
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            titleLabel.topAnchor.constraint(equalTo: symbolView.bottomAnchor, constant: 16),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            titleLabel.topAnchor.constraint(equalTo: symbolView.bottomAnchor, constant: 12),
 
-            subtitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            subtitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2)
         ])
     }
@@ -154,7 +156,7 @@ private final class HUDContentView: NSView {
             symbolView.image = image
             symbolView.contentTintColor = nil
         } else {
-            let configuration = NSImage.SymbolConfiguration(pointSize: 56, weight: .regular)
+            let configuration = NSImage.SymbolConfiguration(pointSize: 42, weight: .regular)
             symbolView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
                 .withSymbolConfiguration(configuration)
             symbolView.contentTintColor = .labelColor

@@ -134,12 +134,39 @@ public extension LaunchBinding {
         case .terminal:
             return ShortcutExecutionSpec(executable: "/usr/bin/osascript", arguments: ["-e", Self.terminalScript(alias: alias)])
         case .visualStudioCode:
-            let path = (sshRemotePath?.trimmingCharacters(in: .whitespaces)).flatMap { $0.isEmpty ? nil : $0 } ?? "~"
-            return ShortcutExecutionSpec(
-                executable: Self.vsCodeBinary,
-                arguments: ["--remote", "ssh-remote+\(alias)", path]
-            )
+            // The remote path has to be absolute; `~` is resolved by the caller
+            // because only the server knows where the home directory is.
+            guard let path = Self.resolvedRemotePath(sshRemotePath, home: nil) else { return nil }
+            return Self.vsCodeSpec(alias: alias, remotePath: path)
         }
+    }
+
+    static func vsCodeSpec(alias: String, remotePath: String) -> ShortcutExecutionSpec {
+        ShortcutExecutionSpec(
+            executable: vsCodeBinary,
+            arguments: ["--remote", "ssh-remote+\(alias)", remotePath]
+        )
+    }
+
+    /// Turns what the user typed into an absolute path on the server.
+    /// VS Code passes the path through verbatim, so a leading `~` would be
+    /// taken literally and the window would fail to open. Returns nil when the
+    /// home directory is needed but not known yet.
+    static func resolvedRemotePath(_ stored: String?, home: String?) -> String? {
+        let trimmed = (stored ?? "").trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("/") { return trimmed }
+        guard let home, !home.isEmpty else { return nil }
+        let base = home.hasSuffix("/") ? String(home.dropLast()) : home
+        if trimmed.isEmpty || trimmed == "~" { return base }
+        if trimmed.hasPrefix("~/") { return base + "/" + trimmed.dropFirst(2) }
+        return base + "/" + trimmed
+    }
+
+    /// True when `executionSpec` cannot be built without asking the server for
+    /// its home directory.
+    public var needsRemoteHome: Bool {
+        kind == .ssh && (sshOpener ?? .terminal) == .visualStudioCode
+            && Self.resolvedRemotePath(sshRemotePath, home: nil) == nil
     }
 
     /// AppleScript that opens a new Terminal window and runs ssh in it.

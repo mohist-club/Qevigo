@@ -310,11 +310,30 @@ final class SSHBindingTests: XCTestCase {
         XCTAssertTrue(script.contains("activate"))
     }
 
-    func testVSCodeSpecUsesRemoteFlagAndDefaultsToHome() {
-        let spec = binding("web", .visualStudioCode).executionSpec
+    func testVSCodeSpecUsesRemoteFlagWithAnAbsolutePath() {
+        let spec = binding("web", .visualStudioCode, path: "/srv/app").executionSpec
         XCTAssertEqual(spec?.executable, LaunchBinding.vsCodeBinary)
-        XCTAssertEqual(spec?.arguments, ["--remote", "ssh-remote+web", "~"])
-        XCTAssertEqual(binding("web", .visualStudioCode, path: "/srv/app").executionSpec?.arguments.last, "/srv/app")
+        XCTAssertEqual(spec?.arguments, ["--remote", "ssh-remote+web", "/srv/app"])
+    }
+
+    func testVSCodeWithoutAnAbsolutePathWaitsForTheRemoteHome() {
+        // VS Code takes the path verbatim, so "~" would be a literal folder name.
+        for stored in [nil, "", "~", "~/projects", "projects"] {
+            let binding = binding("web", .visualStudioCode, path: stored)
+            XCTAssertTrue(binding.needsRemoteHome, "should resolve \(stored ?? "nil") against the server's home")
+            XCTAssertNil(binding.executionSpec)
+        }
+        XCTAssertFalse(binding("web", .visualStudioCode, path: "/srv").needsRemoteHome)
+        XCTAssertFalse(binding("web", .terminal).needsRemoteHome)
+    }
+
+    func testRemotePathResolution() {
+        XCTAssertEqual(LaunchBinding.resolvedRemotePath(nil, home: "/root"), "/root")
+        XCTAssertEqual(LaunchBinding.resolvedRemotePath("~", home: "/root"), "/root")
+        XCTAssertEqual(LaunchBinding.resolvedRemotePath("~/app", home: "/root"), "/root/app")
+        XCTAssertEqual(LaunchBinding.resolvedRemotePath("app", home: "/home/wayne/"), "/home/wayne/app")
+        XCTAssertEqual(LaunchBinding.resolvedRemotePath("/srv/app", home: nil), "/srv/app", "absolute paths need no home")
+        XCTAssertNil(LaunchBinding.resolvedRemotePath("~/app", home: nil))
     }
 
     func testDefaultsToTerminalAndRejectsEmptyAlias() {

@@ -90,10 +90,13 @@ struct SSHServerPicker: View {
                 if opener == .visualStudioCode {
                     LabeledContent(tr("远程目录", "Remote Folder")) {
                         VStack(alignment: .leading, spacing: 3) {
-                            TextField("", text: $remotePath, prompt: Text("~"))
+                            TextField("", text: $remotePath, prompt: Text(tr("留空＝家目录", "Empty = home directory")))
                                 .labelsHidden()
                                 .frame(width: 230)
-                            Text(tr("需要 VS Code 的 Remote-SSH 扩展。", "Requires the Remote-SSH extension in VS Code."))
+                            Text(tr(
+                                "留空或填 ~ 会自动使用服务器上的家目录，也可以填绝对路径如 /srv/app。需要 VS Code 的 Remote-SSH 扩展。",
+                                "Leave empty or type ~ to use the home directory on the server, or give an absolute path such as /srv/app. Requires the Remote-SSH extension."
+                            ))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

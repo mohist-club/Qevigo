@@ -43,7 +43,7 @@ enum ActionLauncher {
     /// ssh itself: with a key installed the session opens straight away, and
     /// otherwise the terminal prompts. Qevigo never handles the password.
     private static func connect(_ binding: LaunchBinding) {
-        guard LaunchBinding.isValidHostAlias(binding.payload), let spec = binding.executionSpec else {
+        guard LaunchBinding.isValidHostAlias(binding.payload) else {
             present(NSError(domain: "Qevigo.SSH", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: tr(
                     "主机别名无效：“\(binding.payload)”。请使用 ~/.ssh/config 里的 Host 名称，或 user@host 形式。",
@@ -62,8 +62,38 @@ enum ActionLauncher {
             return
         }
         Task {
+            guard let spec = await executionSpec(for: binding) else { return }
             do { _ = try await run(spec) } catch { present(error) }
         }
+    }
+
+    /// VS Code needs an absolute remote path, so `~` and relative paths are
+    /// resolved against the home directory the server reports.
+    private static func executionSpec(for binding: LaunchBinding) async -> ShortcutExecutionSpec? {
+        guard binding.needsRemoteHome else { return binding.executionSpec }
+        guard let home = await remoteHome(of: binding.payload),
+              let path = LaunchBinding.resolvedRemotePath(binding.sshRemotePath, home: home) else {
+            present(NSError(domain: "Qevigo.SSH", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: tr(
+                    "无法读取服务器上的家目录，可能是还没配置免密登录。请先用「安装密钥…」配置密钥，或在「远程目录」里填写绝对路径，例如 /root。",
+                    "Could not read the home directory on the server, probably because key-based login is not set up yet. Use “Install Key…” first, or enter an absolute path such as /root in “Remote Folder”."
+                )
+            ]))
+            return nil
+        }
+        return LaunchBinding.vsCodeSpec(alias: binding.payload, remotePath: path)
+    }
+
+    /// Asks the server where the user's home directory is. VS Code needs an
+    /// absolute remote path, and only the server knows it.
+    private static func remoteHome(of alias: String) async -> String? {
+        let spec = ShortcutExecutionSpec(
+            executable: "/usr/bin/ssh",
+            arguments: ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias, "echo $HOME"]
+        )
+        guard let output = try? await run(spec) else { return nil }
+        let home = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        return home.hasPrefix("/") ? home : nil
     }
 
     /// Opens Terminal and runs ssh-copy-id so the user types their password

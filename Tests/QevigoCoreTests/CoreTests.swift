@@ -626,3 +626,25 @@ final class OpenVPNRuleFreshnessTests: XCTestCase {
         XCTAssertTrue(OpenVPN.removeSudoersCommand().contains("rm -f \(OpenVPN.rulesMarkerPath)"))
     }
 }
+
+final class OpenVPNBundledBinaryTests: XCTestCase {
+    func testTunnelblickBinariesAreOfferedNewestFirst() {
+        let found = OpenVPN.bundledBinaries(listing: { _ in ["openvpn-2.5.8", "openvpn-2.6.12", "README", "openvpn-2.6.9"] })
+        XCTAssertEqual(found.first, "/Applications/Tunnelblick.app/Contents/Resources/openvpn/openvpn-2.6.12/openvpn")
+        XCTAssertEqual(found.count, 3, "only version directories count")
+    }
+
+    func testAnInstalledBinaryWinsOverABundledOne() {
+        let bundled = { ["/Applications/Tunnelblick.app/Contents/Resources/openvpn/openvpn-2.6.12/openvpn"] }
+        XCTAssertEqual(
+            OpenVPN.installedBinary(checking: { $0 == "/opt/homebrew/sbin/openvpn" }, bundled: bundled),
+            "/opt/homebrew/sbin/openvpn"
+        )
+    }
+
+    func testBundledBinaryIsUsedWhenNothingElseIsInstalled() {
+        let path = "/Applications/Tunnelblick.app/Contents/Resources/openvpn/openvpn-2.6.12/openvpn"
+        XCTAssertEqual(OpenVPN.installedBinary(checking: { $0 == path }, bundled: { [path] }), path)
+        XCTAssertNil(OpenVPN.installedBinary(checking: { _ in false }, bundled: { [] }))
+    }
+}

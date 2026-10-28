@@ -19,12 +19,27 @@ public enum OpenVPN {
     /// locations are searched, including MacPorts.
     public static func installedBinary(
         preferred: String? = nil,
-        checking exists: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
+        checking exists: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) },
+        bundled: () -> [String] = { bundledBinaries() }
     ) -> String? {
         if let preferred = preferred?.trimmingCharacters(in: .whitespaces), !preferred.isEmpty, exists(preferred) {
             return preferred
         }
-        return binaryCandidates.first(where: exists)
+        if let installed = binaryCandidates.first(where: exists) { return installed }
+        // Tunnelblick ships openvpn builds; reuse one rather than installing a second copy.
+        return bundled().first(where: exists)
+    }
+
+    /// openvpn binaries that come with VPN apps the user may already have.
+    /// Tunnelblick keeps one directory per version, so the newest is picked.
+    public static func bundledBinaries(
+        listing: (String) -> [String] = { (try? FileManager.default.contentsOfDirectory(atPath: $0)) ?? [] }
+    ) -> [String] {
+        let root = "/Applications/Tunnelblick.app/Contents/Resources/openvpn"
+        return listing(root)
+            .filter { $0.hasPrefix("openvpn-") }
+            .sorted { $0.localizedStandardCompare($1) == .orderedDescending }
+            .map { "\(root)/\($0)/openvpn" }
     }
 
     /// Homebrew, Intel and Apple Silicon.

@@ -49,8 +49,8 @@ struct VPNConfigPicker: View {
                             }
                             FormNote(brewPath == nil
                                 ? tr(
-                                    "将依次安装 Homebrew 和 openvpn（会在终端里进行，需要输入一次 Mac 密码）。openvpn 命令行本身就是完整客户端，不需要图形版。",
-                                    "Installs Homebrew and then openvpn in Terminal; it asks for your Mac password once. The openvpn CLI is a complete client, no GUI app needed."
+                                    "这台 Mac 还没有 Homebrew，将先安装它再装 openvpn。Homebrew 需要 Xcode 命令行工具，首次安装要下载 1 GB 以上、可能需要十几分钟。已经用别的方式装过 openvpn 的话，请用右边的按钮直接指定。",
+                                    "This Mac has no Homebrew, so it is installed first. Homebrew needs the Xcode Command Line Tools: over 1 GB on a first install and it can take a while. If openvpn is already installed another way, point at it instead."
                                 )
                                 : tr(
                                     "将通过 Homebrew 安装 openvpn（约 1 MB，在终端里进行）。openvpn 命令行本身就是完整客户端，不需要图形版。",

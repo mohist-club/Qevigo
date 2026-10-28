@@ -153,7 +153,9 @@ file "$OUT/openvpn-universal" | sed 's/^/    /'
 otool -L "$OUT/openvpn-universal" | tail -n +2 | sed 's/^/    links: /'
 # The whole point is that it runs on a Mac with nothing installed, so a link to
 # anything outside the system libraries is a failure, not a warning.
-if otool -L "$OUT/openvpn-universal" | tail -n +2 | grep -vqE '^[[:space:]]+(/usr/lib/|/System/)'; then
+# Only the indented lines name libraries; a universal binary also prints a
+# header line per architecture.
+if otool -L "$OUT/openvpn-universal" | grep -E '^[[:space:]]' | grep -vqE '^[[:space:]]+(/usr/lib/|/System/)'; then
     echo "error: links to a library outside the system; the binary is not self-contained" >&2
     exit 1
 fi

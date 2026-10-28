@@ -700,3 +700,82 @@ final class OpenVPNEngineTests: XCTestCase {
         XCTAssertFalse(OpenVPN.managedBinaryPath.contains(" "), "sudoers rules cannot express a path with spaces")
     }
 }
+
+final class VPNStatisticsTests: XCTestCase {
+    func testFindsTheTunnelInterfaceInTheLog() {
+        let log = """
+        2026-10-28 19:36:30 OPTIONS IMPORT: --ifconfig/up options modified
+        2026-10-28 19:36:30 Opened utun device utun6
+        2026-10-28 19:36:30 /sbin/ifconfig utun6 delete
+        """
+        XCTAssertEqual(VPNStatistics.tunnelInterface(log: log), "utun6")
+    }
+
+    func testIgnoresTheInterfacesOpenVPNFailedToOpen() {
+        let log = """
+        2026-10-28 17:09:31 Opening utun245 failed (connect(AF_SYS_CONTROL)): Operation not permitted
+        2026-10-28 17:09:31 Opened utun device utun7
+        """
+        XCTAssertEqual(VPNStatistics.tunnelInterface(log: log), "utun7")
+        XCTAssertNil(VPNStatistics.tunnelInterface(log: "no interface here"))
+    }
+
+    func testReadsByteCountersForOneInterface() {
+        let output = """
+        Name       Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
+        utun5      1380  <Link#19>                            0     0          0        4     0        360     0
+        utun6      1500  <Link#21>                         1200     0    3456789     1100     0    1234567     0
+        utun6      1500  10.8.0/24     10.8.0.6              1200     -    3456789     1100     -    1234567     -
+        """
+        let traffic = VPNStatistics.traffic(netstat: output, interface: "utun6")
+        XCTAssertEqual(traffic, TunnelTraffic(received: 3_456_789, sent: 1_234_567))
+        XCTAssertNil(VPNStatistics.traffic(netstat: output, interface: "utun9"))
+    }
+
+    func testReadsCountersForAnInterfaceThatHasALinkAddress() {
+        // en0 carries a MAC address where a tunnel has nothing, so the columns
+        // shift: counting from the end is what keeps both readable.
+        let output = """
+        Name       Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
+        en0        1500  <Link#5>      aa:bb:cc:dd:ee:ff  900     0     777777      800     0     666666     0
+        """
+        XCTAssertEqual(
+            VPNStatistics.traffic(netstat: output, interface: "en0"),
+            TunnelTraffic(received: 777_777, sent: 666_666)
+        )
+    }
+
+    func testRateBetweenSamplesAndCounterReset() {
+        let first = TunnelTraffic(received: 1000, sent: 500)
+        let second = TunnelTraffic(received: 3000, sent: 1500)
+        let rate = VPNStatistics.rate(from: first, to: second, seconds: 2)
+        XCTAssertEqual(rate.down, 1000, accuracy: 0.001)
+        XCTAssertEqual(rate.up, 500, accuracy: 0.001)
+        // A reconnect gives a fresh interface whose counters start again.
+        let reset = VPNStatistics.rate(from: second, to: TunnelTraffic(received: 10, sent: 5), seconds: 1)
+        XCTAssertEqual(reset.down, 10, accuracy: 0.001)
+        XCTAssertEqual(VPNStatistics.rate(from: first, to: second, seconds: 0).down, 0)
+    }
+
+    func testDurationFormatting() {
+        XCTAssertEqual(VPNStatistics.formatDuration(65), "1:05")
+        XCTAssertEqual(VPNStatistics.formatDuration(3903), "1:05:03")
+        XCTAssertEqual(VPNStatistics.formatDuration(-5), "0:00")
+    }
+
+    func testExitLocationParsing() {
+        let json = Data(#"{"ip":"203.0.113.9","city":"Singapore","region":"Singapore","country":"SG","org":"AS1 Example"}"#.utf8)
+        let location = ExitLocation.parse(json)
+        XCTAssertEqual(location?.ip, "203.0.113.9")
+        XCTAssertEqual(location?.place, "Singapore, SG", "a city equal to its region is not repeated")
+        XCTAssertEqual(location?.flag, "🇸🇬")
+        XCTAssertNil(ExitLocation.parse(Data("{}".utf8)), "an answer without an IP is useless")
+    }
+
+    func testPlaceWithPartialData() {
+        XCTAssertEqual(ExitLocation(ip: "1.1.1.1", city: "Tokyo", region: "Tokyo", country: "JP").place, "Tokyo, JP")
+        XCTAssertEqual(ExitLocation(ip: "1.1.1.1", country: "DE").place, "DE")
+        XCTAssertEqual(ExitLocation(ip: "1.1.1.1").place, "")
+        XCTAssertNil(ExitLocation(ip: "1.1.1.1", country: "Germany").flag, "only a two-letter code maps to a flag")
+    }
+}

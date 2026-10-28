@@ -25,12 +25,17 @@ enum ActionLauncher {
     static func execute(_ binding: LaunchBinding) {
         switch binding.kind {
         case .application:
-            toggleApplication(at: URL(fileURLWithPath: binding.payload))
+            toggleApplication(at: URL(fileURLWithPath: binding.payload), named: binding.name)
         case .system:
             guard let action = SystemShortcutAction(rawValue: binding.payload) else { return }
             executeSystem(action, displayName: binding.name)
         case .shortcut, .script:
             guard let spec = binding.executionSpec else { return }
+            ShortcutHUD.shared.show(
+                symbol: binding.kind == .shortcut ? "square.stack.3d.up" : "terminal",
+                title: binding.name,
+                subtitle: tr("已执行", "Ran")
+            )
             Task {
                 do { _ = try await run(spec) } catch { present(error) }
             }
@@ -63,6 +68,11 @@ enum ActionLauncher {
             ]))
             return
         }
+        ShortcutHUD.shared.show(
+            symbol: "server.rack",
+            title: binding.name,
+            subtitle: (binding.sshOpener ?? .terminal) == .visualStudioCode ? "VS Code" : tr("终端", "Terminal")
+        )
         Task {
             guard let spec = await executionSpec(for: binding) else { return }
             do { _ = try await run(spec) } catch { present(error) }
@@ -119,11 +129,15 @@ enum ActionLauncher {
 
     /// Hides the app when it is already frontmost; otherwise launches it or
     /// brings it forward (unhiding it and reopening a window if it has none).
-    static func toggleApplication(at url: URL) {
+    static func toggleApplication(at url: URL, named name: String? = nil) {
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        let title = name ?? (url.deletingPathExtension().lastPathComponent)
         if let frontmost = NSWorkspace.shared.frontmostApplication, isSameApp(frontmost, url) {
             frontmost.hide()
+            ShortcutHUD.shared.show(symbol: "eye.slash", title: title, subtitle: tr("已隐藏", "Hidden"), image: icon)
             return
         }
+        ShortcutHUD.shared.show(symbol: "app", title: title, subtitle: tr("已打开", "Opened"), image: icon)
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in

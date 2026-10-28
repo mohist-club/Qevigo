@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var coordinator = TranslationCoordinator(store: env.settings, service: env.translation)
     private let hotkeys = HotkeyService()
     private var statusItem: NSStatusItem?
+    private let vpnStatus = VPNStatusModel()
     private var settingsController: SettingsWindowController?
     private var cancellables = Set<AnyCancellable>()
 
@@ -99,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func rebuildMenus() {
         let statusMenu = NSMenu()
         statusMenu.delegate = self
+        addVPNStatus(to: statusMenu)
         addBindingItems(to: statusMenu)
         statusMenu.addItem(.separator())
         statusMenu.addItem(item(tr("设置…", "Settings…"), #selector(openSettingsAction), key: ","))
@@ -147,6 +149,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return holder
     }
 
+    /// A live summary of the VPN above the shortcut list, when there is one.
+    private func addVPNStatus(to menu: NSMenu) {
+        guard let binding = env.settings.bindings.first(where: { $0.kind == .vpn && $0.isEnabled }) else { return }
+        vpnStatus.start(binding: binding)
+        let view = NSHostingView(rootView: VPNStatusView(model: vpnStatus) { [weak self] in
+            self?.statusItem?.menu?.cancelTracking()
+            ActionLauncher.execute(binding)
+        })
+        view.frame = NSRect(x: 0, y: 0, width: 260, height: view.fittingSize.height)
+        let item = NSMenuItem()
+        item.view = view
+        menu.addItem(item)
+        menu.addItem(.separator())
+    }
+
     /// One item per enabled binding, showing its key combination on the right.
     private func addBindingItems(to menu: NSMenu) {
         let bindings = env.settings.bindings.filter(\.isEnabled)
@@ -193,9 +210,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // Global hotkeys would be buffered while the menu tracks events and fire
     // after it closes, so pause them while the menu is open.
-    func menuWillOpen(_ menu: NSMenu) { hotkeys.suspend() }
+    func menuWillOpen(_ menu: NSMenu) {
+        hotkeys.suspend()
+        if let binding = env.settings.bindings.first(where: { $0.kind == .vpn && $0.isEnabled }) {
+            vpnStatus.start(binding: binding)
+        }
+    }
 
-    func menuDidClose(_ menu: NSMenu) { syncHotkeys() }
+    func menuDidClose(_ menu: NSMenu) {
+        syncHotkeys()
+        vpnStatus.stop()
+    }
 
     @objc private func openSettingsAction() { openSettings() }
 

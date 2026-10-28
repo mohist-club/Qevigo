@@ -81,7 +81,7 @@ enum VPNService {
             run(OpenVPN.connectSpec(binary: binary, config: config, interactive: false),
                 fallback: OpenVPN.connectSpec(binary: binary, config: config, interactive: true),
                 describing: tr("连接 \(binding.name)", "Connecting \(binding.name)"),
-                waitForTunnel: config)
+                waitForTunnel: config, name: binding.name)
         }
     }
 
@@ -100,6 +100,7 @@ enum VPNService {
     private static func disconnect(_ binding: LaunchBinding) {
         let config = binding.payload
         let action = tr("断开 \(binding.name)", "Disconnecting \(binding.name)")
+        ShortcutHUD.shared.show(symbol: "lock.open", title: binding.name, subtitle: tr("正在断开…", "Disconnecting…"))
         Task {
             do {
                 _ = try await ActionLauncher.runSpec(OpenVPN.disconnectSpec(config: config, interactive: false))
@@ -115,6 +116,12 @@ enum VPNService {
             if await isRunning(config: config) {
                 _ = try? await ActionLauncher.runSpec(OpenVPN.forceDisconnectSpec(config: config, interactive: false))
             }
+            let stopped = await !isRunning(config: config)
+            ShortcutHUD.shared.show(
+                symbol: stopped ? "lock.open" : "exclamationmark.triangle",
+                title: binding.name,
+                subtitle: stopped ? tr("已断开", "Disconnected") : tr("断开失败", "Still connected")
+            )
         }
     }
 
@@ -135,15 +142,16 @@ enum VPNService {
         _ spec: ShortcutExecutionSpec,
         fallback: ShortcutExecutionSpec,
         describing action: String,
-        waitForTunnel config: String? = nil
+        waitForTunnel config: String? = nil,
+        name: String = ""
     ) {
         Task {
             do {
                 _ = try await ActionLauncher.runSpec(spec)
-                if let config { await reportOutcome(config: config, action: action) }
+                if let config { await reportOutcome(config: config, action: action, name: name) }
             } catch {
                 await authorizeAndRun(fallback, describing: action)
-                if let config { await reportOutcome(config: config, action: action) }
+                if let config { await reportOutcome(config: config, action: action, name: name) }
             }
         }
     }
@@ -164,12 +172,15 @@ enum VPNService {
 
     /// openvpn daemonises immediately, so success is judged by the log: it
     /// prints a known line once the tunnel and its routes are up.
-    private static func reportOutcome(config: String, action: String) async {
+    private static func reportOutcome(config: String, action: String, name: String) async {
         let logPath = OpenVPN.logPath(forConfig: config)
         for _ in 0..<40 {
             try? await Task.sleep(nanoseconds: 500_000_000)
             let log = (try? String(contentsOfFile: logPath, encoding: .utf8)) ?? ""
-            if log.contains(OpenVPN.readyMarker) { return }
+            if log.contains(OpenVPN.readyMarker) {
+                ShortcutHUD.shared.show(symbol: "lock.shield.fill", title: name, subtitle: tr("已连接", "Connected"))
+                return
+            }
             // The daemon exits on a fatal error, so a dead process means failure.
             if !log.isEmpty, !OpenVPN.isConnected(config: config) {
                 present(tr(

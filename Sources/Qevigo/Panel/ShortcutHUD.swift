@@ -57,19 +57,19 @@ final class ShortcutHUD {
         return panel
     }
 
-    /// Low and centred on the screen the pointer is on, like the system panels.
+    /// Centred in the upper part of the screen the pointer is on, clear of
+    /// whatever is being worked on lower down.
     private func place(_ panel: NSPanel) {
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         guard let frame = screen?.visibleFrame else { return }
         panel.setFrameOrigin(NSPoint(
             x: frame.midX - Self.side / 2,
-            y: frame.minY + frame.height * 0.12
+            y: frame.maxY - frame.height * 0.16 - Self.side
         ))
     }
 }
 
 private final class HUDContentView: NSView {
-    private let effect = NSVisualEffectView()
     private let symbolView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
@@ -78,16 +78,29 @@ private final class HUDContentView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
 
-        effect.material = .hudWindow
-        effect.blendingMode = .behindWindow
-        effect.state = .active
-        effect.wantsLayer = true
-        effect.layer?.cornerRadius = 20
-        effect.layer?.cornerCurve = .continuous
-        effect.layer?.masksToBounds = true
-        effect.autoresizingMask = [.width, .height]
-        effect.frame = bounds
-        addSubview(effect)
+        // Liquid Glass where the system has it, in its clearest style; older
+        // systems fall back to the most transparent material available.
+        let background: NSView
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView()
+            glass.style = .clear
+            glass.cornerRadius = 22
+            background = glass
+        } else {
+            let effect = NSVisualEffectView()
+            effect.material = .underWindowBackground
+            effect.blendingMode = .behindWindow
+            effect.state = .active
+            effect.wantsLayer = true
+            effect.layer?.cornerRadius = 22
+            effect.layer?.cornerCurve = .continuous
+            effect.layer?.masksToBounds = true
+            background = effect
+        }
+        background.autoresizingMask = [.width, .height]
+        background.frame = bounds
+        addSubview(background)
+        self.background = background
 
         symbolView.imageScaling = .scaleProportionallyUpOrDown
         symbolView.contentTintColor = .labelColor
@@ -103,9 +116,18 @@ private final class HUDContentView: NSView {
         subtitleLabel.lineBreakMode = .byTruncatingTail
         subtitleLabel.maximumNumberOfLines = 1
 
+        // NSGlassEffectView refracts whatever sits in its contentView, so the
+        // labels go there rather than on top of it.
+        let content = NSView(frame: bounds)
+        content.autoresizingMask = [.width, .height]
+        if #available(macOS 26.0, *), let glass = background as? NSGlassEffectView {
+            glass.contentView = content
+        } else {
+            background.addSubview(content)
+        }
         for view in [symbolView, titleLabel, subtitleLabel] {
             view.translatesAutoresizingMaskIntoConstraints = false
-            effect.addSubview(view)
+            content.addSubview(view)
         }
         NSLayoutConstraint.activate([
             symbolView.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -122,6 +144,8 @@ private final class HUDContentView: NSView {
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2)
         ])
     }
+
+    private var background: NSView!
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 

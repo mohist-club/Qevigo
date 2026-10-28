@@ -16,8 +16,16 @@ enum VPNService {
         case missingConfig
     }
 
+    /// The binary the user pointed at, if any.
+    static var preferredBinary: String? {
+        let path = AppEnvironment.shared.settings.preferences.openvpnPath
+        return path.isEmpty ? nil : path
+    }
+
+    static func binary() -> String? { OpenVPN.installedBinary(preferred: preferredBinary) }
+
     static func status(configPath: String) -> Status {
-        guard OpenVPN.installedBinary() != nil else { return .notInstalled }
+        guard binary() != nil else { return .notInstalled }
         guard FileManager.default.fileExists(atPath: configPath) else { return .missingConfig }
         return OpenVPN.isConnected(config: configPath) ? .connected : .disconnected
     }
@@ -45,8 +53,8 @@ enum VPNService {
         switch status(configPath: config) {
         case .notInstalled:
             present(tr(
-                "没有找到 openvpn 命令行。请先在终端运行：brew install openvpn",
-                "The openvpn command-line client was not found. Run: brew install openvpn"
+                "没有找到 openvpn。请在设置 → 快捷键里打开这个 VPN 配置，用「安装 openvpn」按钮装好后再试。",
+                "openvpn was not found. Open this VPN in Settings → Shortcuts and use the “Install openvpn” button first."
             ))
         case .missingConfig:
             present(tr(
@@ -56,7 +64,7 @@ enum VPNService {
         case .connected:
             disconnect(binding)
         case .disconnected:
-            guard let binary = OpenVPN.installedBinary() else { return }
+            guard let binary = binary() else { return }
             prepareOutputFiles(config: config)
             run(OpenVPN.connectSpec(binary: binary, config: config, interactive: false),
                 fallback: OpenVPN.connectSpec(binary: binary, config: config, interactive: true),

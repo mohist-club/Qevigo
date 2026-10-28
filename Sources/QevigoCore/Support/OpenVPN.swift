@@ -10,13 +10,52 @@ public enum OpenVPN {
         "/opt/homebrew/sbin/openvpn",
         "/usr/local/sbin/openvpn",
         "/opt/homebrew/bin/openvpn",
-        "/usr/local/bin/openvpn"
+        "/usr/local/bin/openvpn",
+        "/opt/local/sbin/openvpn",   // MacPorts
+        "/usr/sbin/openvpn"
     ]
 
+    /// A path the user pointed at explicitly wins; otherwise the usual
+    /// locations are searched, including MacPorts.
     public static func installedBinary(
+        preferred: String? = nil,
         checking exists: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
     ) -> String? {
-        binaryCandidates.first(where: exists)
+        if let preferred = preferred?.trimmingCharacters(in: .whitespaces), !preferred.isEmpty, exists(preferred) {
+            return preferred
+        }
+        return binaryCandidates.first(where: exists)
+    }
+
+    /// Homebrew, Intel and Apple Silicon.
+    public static let brewCandidates = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+
+    public static func installedBrew(
+        checking exists: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
+    ) -> String? {
+        brewCandidates.first(where: exists)
+    }
+
+    /// What to run in Terminal to get openvpn. Without Homebrew it has to be
+    /// installed first, so both steps are handed over at once.
+    public static func installCommand(brew: String?) -> String {
+        guard let brew else {
+            return homebrewInstallCommand + " && " + brewCandidates[0] + " install openvpn"
+        }
+        return "\(brew) install openvpn"
+    }
+
+    /// Homebrew's documented installer.
+    public static let homebrewInstallCommand =
+        #"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#
+
+    /// Checks that a hand-picked file really is an openvpn client.
+    public static func versionSpec(binary: String) -> ShortcutExecutionSpec {
+        ShortcutExecutionSpec(executable: binary, arguments: ["--version"])
+    }
+
+    public static func isOpenVPNVersionOutput(_ output: String) -> Bool {
+        output.hasPrefix("OpenVPN ") || output.contains("OpenVPN 2.")
     }
 
     /// Configurations live outside Application Support because that path

@@ -15,8 +15,16 @@ struct VPNConfigPicker: View {
     @State private var errorMessage: String?
     @State private var installedConfig: String?
     @State private var sudoersInstalled = VPNService.hasPasswordlessRules
+    @State private var engineNote: String?
+    @State private var engineTick = 0
 
-    private var binaryPath: String? { OpenVPN.installedBinary() }
+    private var binaryPath: String? { VPNService.binary() }
+    private var brewPath: String? { OpenVPN.installedBrew() }
+    private var installButtonTitle: String {
+        brewPath == nil
+            ? tr("安装 Homebrew 和 openvpn…", "Install Homebrew and openvpn…")
+            : tr("安装 openvpn…", "Install openvpn…")
+    }
     private var isValid: Bool { sourceURL != nil && OpenVPN.isValidConfigName(name) }
 
     var body: some View {
@@ -24,25 +32,33 @@ struct VPNConfigPicker: View {
             header
             Divider()
             Form {
-                LabeledContent(tr("openvpn 命令行", "openvpn CLI")) {
-                    if let binaryPath {
-                        HStack(spacing: 6) {
-                            StatusChip(title: tr("已安装", "Installed"), isGood: true)
-                            Text(binaryPath).font(.caption).foregroundStyle(.secondary)
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 4) {
+                LabeledContent(tr("openvpn 引擎", "openvpn Engine")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let binaryPath {
+                            HStack(spacing: 6) {
+                                StatusChip(title: tr("已就绪", "Ready"), isGood: true)
+                                Text(binaryPath).font(.caption).foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.head)
+                            }
+                        } else {
                             StatusChip(title: tr("未安装", "Not installed"), isGood: false)
                             HStack(spacing: 8) {
-                                Text("brew install openvpn").font(.system(.caption, design: .monospaced))
-                                Button(tr("在终端中安装", "Install in Terminal")) {
-                                    VPNService.openInTerminal(command: "brew install openvpn")
-                                }
+                                Button(installButtonTitle) { installEngine() }
+                                Button(tr("指定已有的 openvpn…", "Choose Existing openvpn…")) { chooseBinary() }
                             }
-                            FormNote(tr(
-                                "openvpn 命令行本身就是完整客户端，不需要再装图形版。",
-                                "The openvpn CLI is a complete client; no GUI app is needed."
-                            ))
+                            FormNote(brewPath == nil
+                                ? tr(
+                                    "将依次安装 Homebrew 和 openvpn（会在终端里进行，需要输入一次 Mac 密码）。openvpn 命令行本身就是完整客户端，不需要图形版。",
+                                    "Installs Homebrew and then openvpn in Terminal; it asks for your Mac password once. The openvpn CLI is a complete client, no GUI app needed."
+                                )
+                                : tr(
+                                    "将通过 Homebrew 安装 openvpn（约 1 MB，在终端里进行）。openvpn 命令行本身就是完整客户端，不需要图形版。",
+                                    "Installs openvpn through Homebrew (about 1 MB) in Terminal. The openvpn CLI is a complete client, no GUI app needed."
+                                ))
+                            if let engineNote {
+                                Text(engineNote).font(.caption).foregroundStyle(.orange)
+                                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 360, alignment: .leading)
+                            }
                         }
                     }
                 }
@@ -104,6 +120,15 @@ struct VPNConfigPicker: View {
         }
         .frame(width: 560)
         .onAppear { sudoersInstalled = VPNService.hasPasswordlessRules }
+        .id(engineTick)
+        .task {
+            // The install runs in Terminal, so watch for the binary appearing.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                sudoersInstalled = VPNService.hasPasswordlessRules
+                engineTick += 1
+            }
+        }
     }
 
     private var header: some View {
@@ -139,6 +164,39 @@ struct VPNConfigPicker: View {
                 .disabled(!isValid)
         }
         .padding(12)
+    }
+
+    private func installEngine() {
+        engineNote = tr(
+            "正在终端里安装，完成后这里会自动变成「已就绪」。",
+            "Installing in Terminal; this turns into “Ready” when it finishes."
+        )
+        VPNService.openInTerminal(command: OpenVPN.installCommand(brew: brewPath))
+    }
+
+    /// For openvpn installed somewhere unusual, e.g. MacPorts or by hand.
+    private func chooseBinary() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.showsHiddenFiles = true
+        panel.directoryURL = URL(fileURLWithPath: "/usr/local/sbin")
+        panel.prompt = tr("选择", "Choose")
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task {
+            let output = (try? await ActionLauncher.runSpec(OpenVPN.versionSpec(binary: url.path))) ?? ""
+            if OpenVPN.isOpenVPNVersionOutput(output) {
+                AppEnvironment.shared.settings.preferences.openvpnPath = url.path
+                engineNote = nil
+                engineTick += 1
+            } else {
+                engineNote = tr(
+                    "这个文件不是 openvpn 客户端。",
+                    "That file is not an openvpn client."
+                )
+            }
+        }
     }
 
     private func chooseFile() {

@@ -547,3 +547,46 @@ final class OpenVPNSafetyTests: XCTestCase {
         }
     }
 }
+
+final class OpenVPNInstallTests: XCTestCase {
+    func testPreferredBinaryWinsOverTheUsualLocations() {
+        let custom = "/opt/local/sbin/openvpn"
+        XCTAssertEqual(OpenVPN.installedBinary(preferred: custom, checking: { _ in true }), custom)
+        XCTAssertEqual(
+            OpenVPN.installedBinary(preferred: "/gone", checking: { $0 == "/opt/homebrew/sbin/openvpn" }),
+            "/opt/homebrew/sbin/openvpn",
+            "a preferred path that no longer exists falls back"
+        )
+        XCTAssertEqual(OpenVPN.installedBinary(preferred: "  ", checking: { $0 == OpenVPN.binaryCandidates[0] }), OpenVPN.binaryCandidates[0])
+    }
+
+    func testMacPortsIsSearchedToo() {
+        XCTAssertEqual(OpenVPN.installedBinary(checking: { $0 == "/opt/local/sbin/openvpn" }), "/opt/local/sbin/openvpn")
+    }
+
+    func testInstallCommandWithAndWithoutHomebrew() {
+        XCTAssertEqual(OpenVPN.installCommand(brew: "/opt/homebrew/bin/brew"), "/opt/homebrew/bin/brew install openvpn")
+        let bootstrapped = OpenVPN.installCommand(brew: nil)
+        XCTAssertTrue(bootstrapped.contains("install.sh"), "Homebrew has to be installed first")
+        XCTAssertTrue(bootstrapped.hasSuffix("install openvpn"))
+    }
+
+    func testBrewLookup() {
+        XCTAssertEqual(OpenVPN.installedBrew(checking: { $0 == "/usr/local/bin/brew" }), "/usr/local/bin/brew")
+        XCTAssertNil(OpenVPN.installedBrew(checking: { _ in false }))
+    }
+
+    func testVersionOutputRecognition() {
+        XCTAssertTrue(OpenVPN.isOpenVPNVersionOutput("OpenVPN 2.7.8 aarch64-apple-darwin27.0.0"))
+        XCTAssertFalse(OpenVPN.isOpenVPNVersionOutput("Python 3.13.0"))
+        XCTAssertFalse(OpenVPN.isOpenVPNVersionOutput(""))
+    }
+
+    func testCustomPathSurvivesSaving() throws {
+        var preferences = AppPreferences()
+        preferences.openvpnPath = "/opt/local/sbin/openvpn"
+        let decoded = try JSONDecoder().decode(AppPreferences.self, from: JSONEncoder().encode(preferences))
+        XCTAssertEqual(decoded.openvpnPath, "/opt/local/sbin/openvpn")
+        XCTAssertEqual(try JSONDecoder().decode(AppPreferences.self, from: Data("{}".utf8)).openvpnPath, "")
+    }
+}

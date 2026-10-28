@@ -34,7 +34,64 @@ enum ActionLauncher {
             Task {
                 do { _ = try await run(spec) } catch { present(error) }
             }
+        case .ssh:
+            connect(binding)
         }
+    }
+
+    /// Opens an SSH session in Terminal or VS Code. Authentication is left to
+    /// ssh itself: with a key installed the session opens straight away, and
+    /// otherwise the terminal prompts. Qevigo never handles the password.
+    private static func connect(_ binding: LaunchBinding) {
+        guard LaunchBinding.isValidHostAlias(binding.payload), let spec = binding.executionSpec else {
+            present(NSError(domain: "Qevigo.SSH", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: tr(
+                    "主机别名无效：“\(binding.payload)”。请使用 ~/.ssh/config 里的 Host 名称，或 user@host 形式。",
+                    "Invalid host alias “\(binding.payload)”. Use a Host from ~/.ssh/config, or user@host."
+                )
+            ]))
+            return
+        }
+        if binding.sshOpener == .visualStudioCode, !FileManager.default.isExecutableFile(atPath: LaunchBinding.vsCodeBinary) {
+            present(NSError(domain: "Qevigo.SSH", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: tr(
+                    "找不到 VS Code。请把 Visual Studio Code 安装到「应用程序」，并确认已安装 Remote-SSH 扩展。",
+                    "VS Code was not found. Install it in /Applications and make sure the Remote-SSH extension is present."
+                )
+            ]))
+            return
+        }
+        Task {
+            do { _ = try await run(spec) } catch { present(error) }
+        }
+    }
+
+    /// Opens Terminal and runs ssh-copy-id so the user types their password
+    /// once; afterwards the key handles authentication. The password is typed
+    /// into Terminal by the user and never passes through Qevigo.
+    static func installSSHKey(alias: String, publicKey: String) {
+        guard LaunchBinding.isValidHostAlias(alias) else { return }
+        let command = "ssh-copy-id -i \(publicKey) \(alias)"
+        let script = """
+        tell application "Terminal"
+        \tactivate
+        \tdo script "\(command)"
+        end tell
+        """
+        Task {
+            do {
+                _ = try await run(ShortcutExecutionSpec(executable: "/usr/bin/osascript", arguments: ["-e", script]))
+            } catch { present(error) }
+        }
+    }
+
+    /// Public keys that can be offered for `ssh-copy-id`.
+    static func availablePublicKeys() -> [String] {
+        let directory = (NSHomeDirectory() as NSString).appendingPathComponent(".ssh")
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? []
+        return names.filter { $0.hasSuffix(".pub") }
+            .sorted()
+            .map { (directory as NSString).appendingPathComponent($0) }
     }
 
     /// Hides the app when it is already frontmost; otherwise launches it or

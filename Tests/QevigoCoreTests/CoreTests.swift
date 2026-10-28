@@ -242,3 +242,104 @@ final class LegacyImportTests: XCTestCase {
         XCTAssertTrue(LegacyImport.load(supportDirectory: dir, defaults: nil).isEmpty)
     }
 }
+
+final class SSHConfigTests: XCTestCase {
+    func testParsesAliasesWithDetails() {
+        let config = """
+        # comment
+        Host web
+            HostName example.com
+            User deploy
+            Port 2222
+
+        Host db
+          HostName=10.0.0.5
+        """
+        let hosts = SSHConfig.hosts(parsing: config)
+        XCTAssertEqual(hosts.map(\.alias), ["web", "db"])
+        XCTAssertEqual(hosts[0].user, "deploy")
+        XCTAssertEqual(hosts[0].port, 2222)
+        XCTAssertEqual(hosts[0].detail, "deploy@example.com:2222")
+        XCTAssertEqual(hosts[1].hostName, "10.0.0.5")
+        XCTAssertEqual(hosts[1].detail, "10.0.0.5")
+    }
+
+    func testSkipsPatternsAndDeduplicates() {
+        let config = """
+        Host *
+            AddKeysToAgent yes
+        Host !excluded prod
+            HostName prod.example.com
+        Host prod
+            HostName other.example.com
+        Host staging?
+        """
+        let hosts = SSHConfig.hosts(parsing: config)
+        XCTAssertEqual(hosts.map(\.alias), ["prod"])
+        XCTAssertEqual(hosts[0].hostName, "prod.example.com", "first entry wins, like ssh itself")
+    }
+
+    func testOneLineWithSeveralAliases() {
+        let hosts = SSHConfig.hosts(parsing: "Host alpha beta\n    User root")
+        XCTAssertEqual(hosts.map(\.alias), ["alpha", "beta"])
+        XCTAssertTrue(hosts.allSatisfy { $0.user == "root" })
+    }
+
+    func testMatchBlockDoesNotLeakIntoPreviousHost() {
+        let hosts = SSHConfig.hosts(parsing: "Host web\n  HostName a.com\nMatch host b.com\n  User other")
+        XCTAssertEqual(hosts.map(\.alias), ["web"])
+        XCTAssertNil(hosts[0].user)
+    }
+
+    func testMissingFileIsEmpty() {
+        XCTAssertTrue(SSHConfig.hosts(at: URL(fileURLWithPath: "/nonexistent/ssh/config")).isEmpty)
+    }
+}
+
+final class SSHBindingTests: XCTestCase {
+    private func binding(_ alias: String, _ opener: SSHOpener, path: String? = nil) -> LaunchBinding {
+        LaunchBinding(name: "server", payload: alias, kind: .ssh, sshOpener: opener, sshRemotePath: path)
+    }
+
+    func testTerminalSpecRunsSSHInANewWindow() {
+        let spec = binding("web", .terminal).executionSpec
+        XCTAssertEqual(spec?.executable, "/usr/bin/osascript")
+        XCTAssertEqual(spec?.arguments.first, "-e")
+        let script = spec?.arguments.last ?? ""
+        XCTAssertTrue(script.contains(#"do script "ssh web""#))
+        XCTAssertTrue(script.contains("activate"))
+    }
+
+    func testVSCodeSpecUsesRemoteFlagAndDefaultsToHome() {
+        let spec = binding("web", .visualStudioCode).executionSpec
+        XCTAssertEqual(spec?.executable, LaunchBinding.vsCodeBinary)
+        XCTAssertEqual(spec?.arguments, ["--remote", "ssh-remote+web", "~"])
+        XCTAssertEqual(binding("web", .visualStudioCode, path: "/srv/app").executionSpec?.arguments.last, "/srv/app")
+    }
+
+    func testDefaultsToTerminalAndRejectsEmptyAlias() {
+        XCTAssertEqual(LaunchBinding(name: "s", payload: "web", kind: .ssh).executionSpec?.executable, "/usr/bin/osascript")
+        XCTAssertNil(binding("  ", .terminal).executionSpec)
+    }
+
+    func testAliasValidationRejectsInjection() {
+        XCTAssertTrue(LaunchBinding.isValidHostAlias("web-1.example.com"))
+        XCTAssertTrue(LaunchBinding.isValidHostAlias("deploy@10.0.0.5"))
+        for bad in [#"web"; rm -rf /"#, "web\nHost other", "web && echo", "-oProxyCommand=x", "web$(id)", "", "web host"] {
+            XCTAssertFalse(LaunchBinding.isValidHostAlias(bad), "should reject \(bad)")
+        }
+    }
+
+    func testSSHBindingSurvivesRoundTrip() throws {
+        let original = binding("web", .visualStudioCode, path: "/srv")
+        let decoded = try JSONDecoder().decode(LaunchBinding.self, from: JSONEncoder().encode(original))
+        XCTAssertEqual(decoded, original)
+    }
+
+    func testLegacyBindingWithoutSSHFieldsStillDecodes() throws {
+        let json = #"{"id":"0E0E5F40-9C6B-4E5B-9E58-4D9E0F0F0F0F","appName":"Safari","appBundlePath":"/Applications/Safari.app"}"#
+        let decoded = try JSONDecoder().decode(LaunchBinding.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.sshOpener)
+        XCTAssertEqual(decoded.kind, .application)
+    }
+}

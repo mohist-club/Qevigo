@@ -175,6 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .shortcut: image = NSImage(systemSymbolName: "square.stack.3d.up", accessibilityDescription: nil)
         case .system: image = NSImage(systemSymbolName: "gearshape.2", accessibilityDescription: nil)
         case .script: image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+        case .ssh: image = NSImage(systemSymbolName: "server.rack", accessibilityDescription: nil)
         }
         image?.size = NSSize(width: 16, height: 16)
         return image

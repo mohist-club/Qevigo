@@ -9,7 +9,7 @@ private enum ShortcutRowID: Hashable {
 }
 
 private enum AddSheet: String, Identifiable {
-    case application, shortcut, system, script
+    case application, shortcut, system, script, ssh
     var id: String { rawValue }
 }
 
@@ -57,6 +57,7 @@ struct ShortcutsTab: View {
                         Button { sheet = .shortcut } label: { Label(tr("快捷指令…", "Shortcut…"), systemImage: "square.stack.3d.up") }
                         Button { sheet = .system } label: { Label(tr("系统操作…", "System Action…"), systemImage: "gearshape.2") }
                         Button { sheet = .script } label: { Label(tr("脚本…", "Script…"), systemImage: "terminal") }
+                        Button { sheet = .ssh } label: { Label(tr("SSH 服务器…", "SSH Server…"), systemImage: "server.rack") }
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -84,6 +85,7 @@ struct ShortcutsTab: View {
             case .shortcut: ShortcutsPicker { add($0) }
             case .system: SystemActionPicker { add($0) }
             case .script: ScriptEditor { add($0) }
+            case .ssh: SSHServerPicker { add($0) }
             }
         }
     }
@@ -134,6 +136,8 @@ struct ShortcutsTab: View {
             return AnyView(Image(systemName: "gearshape.2").resizable().scaledToFit().foregroundStyle(.secondary))
         case .script:
             return AnyView(Image(systemName: "terminal").resizable().scaledToFit().foregroundStyle(.secondary))
+        case .ssh:
+            return AnyView(Image(systemName: "server.rack").resizable().scaledToFit().foregroundStyle(.secondary))
         }
     }
 
@@ -142,6 +146,9 @@ struct ShortcutsTab: View {
         case .application: return tr("打开 / 隐藏应用", "Open / Hide Application")
         case .shortcut: return tr("运行快捷指令", "Run Shortcut")
         case .system: return tr("系统操作", "System Action")
+        case .ssh:
+            let opener = (binding.sshOpener ?? .terminal).localizedName
+            return tr("SSH · \(binding.payload) · \(opener)", "SSH · \(binding.payload) · \(opener)")
         case .script:
             switch binding.scriptKind ?? .shell {
             case .shell: return "Shell"

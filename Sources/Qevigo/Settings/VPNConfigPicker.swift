@@ -127,6 +127,8 @@ struct VPNConfigPicker: View {
                     VStack(alignment: .leading, spacing: 5) {
                         if sudoersInstalled, rulesCurrent {
                             StatusChip(title: tr("已配置", "Configured"), isGood: true)
+                        } else if !hasVPNs {
+                            StatusChip(title: tr("未配置", "Not configured"), isGood: false)
                         } else if sudoersInstalled {
                             VStack(alignment: .leading, spacing: 4) {
                                 StatusChip(title: tr("需要更新", "Needs updating"), isGood: false)
@@ -139,6 +141,12 @@ struct VPNConfigPicker: View {
                             }
                         } else {
                             StatusChip(title: tr("未配置", "Not configured"), isGood: false)
+                        }
+                        // Reachable at any time: the rules used to be installed
+                        // only while adding a configuration, so a Terminal window
+                        // closed too early left no way back.
+                        if hasVPNs, !(sudoersInstalled && rulesCurrent) {
+                            Button(tr("现在配置免密…", "Set Up Passwordless Now…")) { installRules() }
                         }
                         FormNote(tr(
                             "建立 VPN 隧道需要管理员权限。未配置时，每次连接都会打开终端让你输入 Mac 密码；配置一次之后，按快捷键即可直接连接。",
@@ -208,6 +216,19 @@ struct VPNConfigPicker: View {
                 .disabled(!isValid)
         }
         .padding(12)
+    }
+
+    private var hasVPNs: Bool { !VPNConfigStore.managedConfigs(in: existing).isEmpty }
+
+    private func installRules() {
+        guard let command = VPNConfigStore.sudoersInstallCommand(for: existing) else {
+            engineNote = tr("需要先装好 openvpn 引擎。", "The openvpn engine has to be installed first.")
+            return
+        }
+        VPNService.openInTerminal(command: command, note: tr(
+            "输入你的 Mac 密码以启用免密连接（只需这一次）。",
+            "Enter your Mac password once to enable passwordless connections."
+        ))
     }
 
     private func refreshStatus() {

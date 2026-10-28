@@ -191,9 +191,16 @@ enum VPNService {
         """
         var info: NSDictionary?
         NSAppleScript(source: script)?.executeAndReturnError(&info)
-        if let info {
-            present(info[NSAppleScript.errorMessage] as? String ?? tr("无法打开终端", "Could not open Terminal"))
-        }
+        guard let info else { return }
+        // Controlling Terminal needs the user's permission, and a refusal here
+        // used to leave no way to run the command at all.
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(command, forType: .string)
+        let reason = info[NSAppleScript.errorMessage] as? String ?? ""
+        present(tr(
+            "Qevigo 无法打开终端（\(reason)）。命令已复制到剪贴板，请自己打开终端粘贴执行。\n\n如果是权限问题，可到 系统设置 → 隐私与安全性 → 自动化 中允许 Qevigo 控制「终端」。",
+            "Qevigo could not open Terminal (\(reason)). The command is on the clipboard; paste it into Terminal yourself.\n\nIf this is a permission problem, allow Qevigo to control Terminal in System Settings → Privacy & Security → Automation."
+        ))
     }
 
     private static func quoteForShell(_ value: String) -> String {

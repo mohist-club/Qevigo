@@ -105,10 +105,9 @@ enum VPNService {
                 _ = try await ActionLauncher.runSpec(OpenVPN.disconnectSpec(config: config, interactive: false))
             } catch {
                 if (try? await ActionLauncher.runSpec(OpenVPN.forceDisconnectSpec(config: config, interactive: false))) == nil {
-                    openInTerminal(OpenVPN.forceDisconnectSpec(config: config, interactive: true), note: tr(
-                        "请在终端里输入你的 Mac 密码以\(action)。",
-                        "Enter your Mac password in Terminal to continue."
-                    ))
+                    // The same grant installs the rules, so this is the last
+                    // time stopping a tunnel asks for anything.
+                    await authorizeAndRun(OpenVPN.forceDisconnectSpec(config: config, interactive: true), describing: action)
                     return
                 }
             }
@@ -157,7 +156,8 @@ enum VPNService {
         var full = command
         if !rulesCover(bindings: bindings), let install = VPNConfigStore.sudoersInstallCommand(for: bindings) {
             // Separated by ';' so the action still runs if the rules fail.
-            full = install.replacingOccurrences(of: "sudo ", with: "") + " ; " + command
+            // ';' so the action still runs if installing the rules fails.
+            full = install + " ; " + command
         }
         await runAsAdministrator(command: full, describing: action)
     }

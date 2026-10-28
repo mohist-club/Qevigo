@@ -154,8 +154,13 @@ struct VPNConfigPicker: View {
                         ))
                         if sudoersInstalled {
                             Button(tr("取消免密（恢复每次询问）", "Remove passwordless access")) {
-                                VPNService.openInTerminal(command: OpenVPN.removeSudoersCommand())
-                                sudoersInstalled = false
+                                Task {
+                                    let removed = await VPNService.runAsAdministrator(
+                                        command: OpenVPN.removeSudoersCommand(),
+                                        describing: tr("取消免密", "Removing passwordless access")
+                                    )
+                                    if removed { refreshStatus() }
+                                }
                             }
                         }
                     }
@@ -227,7 +232,7 @@ struct VPNConfigPicker: View {
         }
         Task {
             let installed = await VPNService.runAsAdministrator(
-                command: command.replacingOccurrences(of: "sudo ", with: ""),
+                command: command,
                 describing: tr("配置免密", "Setting up passwordless access")
             )
             if installed { refreshStatus() }
@@ -302,7 +307,7 @@ struct VPNConfigPicker: View {
             if let command = VPNConfigStore.sudoersInstallCommand(for: existing + [binding]) {
                 Task {
                     await VPNService.runAsAdministrator(
-                        command: command.replacingOccurrences(of: "sudo ", with: ""),
+                        command: command,
                         describing: tr("配置免密", "Setting up passwordless access")
                     )
                 }

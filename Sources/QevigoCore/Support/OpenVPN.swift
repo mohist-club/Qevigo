@@ -281,13 +281,15 @@ public enum OpenVPN {
     /// Shell command that validates the generated rules and installs them.
     /// Run in Terminal so the user types their password once, in a window they
     /// can see, rather than into Qevigo.
+    /// Runs as root already (behind the system authorisation dialog), so no
+    /// sudo appears here.
     public static func installSudoersCommand(stagedFile: String, marker: String? = nil) -> String {
-        var command = "sudo visudo -cf \(stagedFile) && sudo install -o root -g wheel -m 440 \(stagedFile) \(sudoersPath)"
-        if let marker { command += " && cp \(marker) \(rulesMarkerPath)" }
-        return command + " && rm -f \(stagedFile) \(marker ?? "") && echo '✅ 免密配置完成，可以关闭这个窗口'"
+        var command = "/usr/sbin/visudo -cf \(stagedFile) && /usr/bin/install -o root -g wheel -m 440 \(stagedFile) \(sudoersPath)"
+        if let marker { command += " && /bin/cp \(marker) \(rulesMarkerPath)" }
+        return command + " && /bin/rm -f \(stagedFile) \(marker ?? "")"
     }
 
     public static func removeSudoersCommand() -> String {
-        "sudo rm -f \(sudoersPath) && rm -f \(rulesMarkerPath) && echo '✅ 已恢复为每次询问密码'"
+        "/bin/rm -f \(sudoersPath) \(rulesMarkerPath)"
     }
 }

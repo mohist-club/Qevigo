@@ -623,7 +623,31 @@ final class OpenVPNRuleFreshnessTests: XCTestCase {
         let command = OpenVPN.installSudoersCommand(stagedFile: "/tmp/staged", marker: "/tmp/marker")
         XCTAssertTrue(command.contains("visudo -cf /tmp/staged"), "rules are validated before install")
         XCTAssertTrue(command.contains("cp /tmp/marker \(OpenVPN.rulesMarkerPath)"))
-        XCTAssertTrue(OpenVPN.removeSudoersCommand().contains("rm -f \(OpenVPN.rulesMarkerPath)"))
+        XCTAssertTrue(OpenVPN.removeSudoersCommand().contains(OpenVPN.rulesMarkerPath))
+    }
+
+    func testRootCommandsCarryNoSudo() {
+        // These run behind the system authorisation dialog, already as root.
+        // A "sudo " prefix here was once stripped textually, which turned
+        // "visudo" into "vi" and silently broke installing the rules.
+        for command in [
+            OpenVPN.installSudoersCommand(stagedFile: "/tmp/staged", marker: "/tmp/marker"),
+            OpenVPN.removeSudoersCommand()
+        ] {
+            // Checking for the substring would match "visudo", which is exactly
+            // the confusion that broke the install command.
+            XCTAssertFalse(command.hasPrefix("sudo "), "no leading sudo: \(command)")
+            XCTAssertFalse(command.contains(" sudo "), "no sudo in the chain: \(command)")
+            XCTAssertTrue(command.contains("visudo") || command.contains("/bin/rm"))
+        }
+    }
+
+    func testInstallCommandUsesAbsolutePaths() {
+        // do shell script runs with a minimal PATH.
+        let command = OpenVPN.installSudoersCommand(stagedFile: "/tmp/staged", marker: "/tmp/marker")
+        for tool in ["/usr/sbin/visudo", "/usr/bin/install", "/bin/cp", "/bin/rm"] {
+            XCTAssertTrue(command.contains(tool), "missing \(tool) in: \(command)")
+        }
     }
 }
 

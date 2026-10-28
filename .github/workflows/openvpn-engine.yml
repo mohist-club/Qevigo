@@ -1,0 +1,86 @@
+name: Build openvpn engine
+
+# Produces the self-contained openvpn binary Qevigo installs for users who have
+# neither Homebrew nor another VPN client. Run it by hand: the engine only
+# changes when openvpn or OpenSSL does, not with every Qevigo release.
+on:
+  workflow_dispatch:
+    inputs:
+      openvpn_version:
+        description: openvpn version
+        default: "2.7.8"
+      openssl_version:
+        description: OpenSSL version
+        default: "4.1.0"
+      publish:
+        description: Attach the binary to a release tagged openvpn-<version>
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build universal binary
+        env:
+          OPENVPN_VERSION: ${{ inputs.openvpn_version }}
+          OPENSSL_VERSION: ${{ inputs.openssl_version }}
+        run: ./scripts/build-openvpn.sh
+
+      - name: Record what was built
+        id: engine
+        run: |
+          echo "sha256=$(shasum -a 256 dist/openvpn-universal | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h dist/openvpn-universal | cut -f1)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### openvpn engine"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| openvpn | ${{ inputs.openvpn_version }} |"
+            echo "| OpenSSL | ${{ inputs.openssl_version }} |"
+            echo "| sha256 | \`$(shasum -a 256 dist/openvpn-universal | cut -d' ' -f1)\` |"
+            echo "| arch | $(lipo -archs dist/openvpn-universal) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openvpn-universal
+          path: dist/openvpn-universal
+
+      # GPL-2.0 requires the source to be available alongside the binary, so the
+      # release carries the build script that names and verifies every source.
+      - name: Publish
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="openvpn-${{ inputs.openvpn_version }}"
+          NOTES=$(cat <<EOF
+          Self-contained \`openvpn\` for Qevigo: a universal binary with OpenSSL
+          ${{ inputs.openssl_version }} and LZO linked in. Needs no Homebrew and
+          no Xcode command line tools.
+
+          \`\`\`
+          sha256  ${{ steps.engine.outputs.sha256 }}
+          size    ${{ steps.engine.outputs.size }}
+          \`\`\`
+
+          openvpn is GPL-2.0. Its source is the official
+          \`openvpn-${{ inputs.openvpn_version }}.tar.gz\`, and
+          [scripts/build-openvpn.sh](../blob/main/scripts/build-openvpn.sh)
+          in this repository is the exact recipe, including the checksum of
+          every source archive.
+          EOF
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/openvpn-universal --clobber
+          else
+            gh release create "$TAG" dist/openvpn-universal \
+              --title "openvpn engine ${{ inputs.openvpn_version }}" --notes "$NOTES"
+          fi

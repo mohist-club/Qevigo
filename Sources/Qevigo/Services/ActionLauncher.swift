@@ -85,15 +85,6 @@ enum ActionLauncher {
         }
     }
 
-    /// Public keys that can be offered for `ssh-copy-id`.
-    static func availablePublicKeys() -> [String] {
-        let directory = (NSHomeDirectory() as NSString).appendingPathComponent(".ssh")
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory)) ?? []
-        return names.filter { $0.hasSuffix(".pub") }
-            .sorted()
-            .map { (directory as NSString).appendingPathComponent($0) }
-    }
-
     /// Hides the app when it is already frontmost; otherwise launches it or
     /// brings it forward (unhiding it and reopening a window if it has none).
     static func toggleApplication(at url: URL) {

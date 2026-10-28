@@ -343,3 +343,56 @@ final class SSHBindingTests: XCTestCase {
         XCTAssertEqual(decoded.kind, .application)
     }
 }
+
+final class SSHPublicKeyTests: XCTestCase {
+    func testParsesTypeAndComment() throws {
+        let key = try XCTUnwrap(SSHPublicKey(path: "/u/.ssh/id_ed25519.pub", contents: "ssh-ed25519 AAAAC3Nz wayne@mac\n"))
+        XCTAssertEqual(key.algorithm, "ED25519")
+        XCTAssertEqual(key.comment, "wayne@mac")
+        XCTAssertEqual(key.fileName, "id_ed25519.pub")
+        XCTAssertEqual(key.label, "id_ed25519.pub · wayne@mac", "comment identifies the key; algorithm is noise when present")
+        XCTAssertTrue(key.isDefaultIdentity)
+    }
+
+    func testCommentMayContainSpacesAndMayBeMissing() throws {
+        let withSpaces = try XCTUnwrap(SSHPublicKey(path: "/k.pub", contents: "ssh-rsa AAAAB3 my laptop key"))
+        XCTAssertEqual(withSpaces.comment, "my laptop key")
+        XCTAssertEqual(withSpaces.algorithm, "RSA")
+        let bare = try XCTUnwrap(SSHPublicKey(path: "/k.pub", contents: "ssh-ed25519 AAAAC3Nz"))
+        XCTAssertEqual(bare.comment, "")
+        XCTAssertEqual(bare.label, "k.pub · ED25519", "falls back to the algorithm when there is no comment")
+        XCTAssertFalse(bare.isDefaultIdentity)
+    }
+
+    func testAlgorithmNames() {
+        XCTAssertEqual(SSHPublicKey.algorithmName("ecdsa-sha2-nistp256"), "ECDSA")
+        XCTAssertEqual(SSHPublicKey.algorithmName("ssh-dss"), "DSA")
+        XCTAssertTrue(SSHPublicKey.algorithmName("sk-ssh-ed25519@openssh.com").hasPrefix("ED25519"))
+        XCTAssertEqual(SSHPublicKey.algorithmName("future-type"), "future-type")
+    }
+
+    func testRejectsMalformedFile() {
+        XCTAssertNil(SSHPublicKey(path: "/k.pub", contents: ""))
+        XCTAssertNil(SSHPublicKey(path: "/k.pub", contents: "ssh-ed25519"))
+    }
+
+    func testListsKeysNewestFirstAndSkipsOtherFiles() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try "ssh-ed25519 AAAA old@mac".write(to: dir.appendingPathComponent("old.pub"), atomically: true, encoding: .utf8)
+        try "private".write(to: dir.appendingPathComponent("id_ed25519"), atomically: true, encoding: .utf8)
+        try "ssh-ed25519 AAAA new@mac".write(to: dir.appendingPathComponent("new.pub"), atomically: true, encoding: .utf8)
+        // Make the creation order unambiguous regardless of filesystem timestamps.
+        try FileManager.default.setAttributes([.creationDate: Date(timeIntervalSince1970: 1)], ofItemAtPath: dir.appendingPathComponent("old.pub").path)
+        try FileManager.default.setAttributes([.creationDate: Date()], ofItemAtPath: dir.appendingPathComponent("new.pub").path)
+
+        let keys = SSHPublicKey.available(in: dir.path)
+        XCTAssertEqual(keys.map(\.fileName), ["new.pub", "old.pub"])
+
+        // ssh's own identity sorts ahead of newer custom keys.
+        try "ssh-ed25519 AAAA default@mac".write(to: dir.appendingPathComponent("id_ed25519.pub"), atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.creationDate: Date(timeIntervalSince1970: 2)], ofItemAtPath: dir.appendingPathComponent("id_ed25519.pub").path)
+        XCTAssertEqual(SSHPublicKey.available(in: dir.path).first?.fileName, "id_ed25519.pub")
+    }
+}

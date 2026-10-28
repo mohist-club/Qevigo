@@ -14,7 +14,7 @@ struct SSHServerPicker: View {
     @State private var manualAlias = ""
     @State private var opener: SSHOpener = .terminal
     @State private var remotePath = ""
-    @State private var publicKeys: [String] = []
+    @State private var publicKeys: [SSHPublicKey] = []
     @State private var selectedKey = ""
     @State private var keyNotice: String?
 
@@ -23,6 +23,18 @@ struct SSHServerPicker: View {
     }
 
     private var isValid: Bool { LaunchBinding.isValidHostAlias(alias) }
+
+    private var isDefaultKeySelected: Bool {
+        publicKeys.first { $0.path == selectedKey }?.isDefaultIdentity ?? true
+    }
+
+    private var defaultKeyHint: String {
+        isDefaultKeySelected
+            ? tr("在终端运行一次 ssh-copy-id，输入一次密码后即可免密连接。",
+                 "Runs ssh-copy-id once in Terminal: enter the password one time, then connect without it.")
+            : tr("这不是 ssh 的默认密钥：装上之后还要在 ~/.ssh/config 里为该主机加一行 IdentityFile，ssh 才会使用它。",
+                 "This is not one of ssh's default identities: after installing it, add an IdentityFile line for this host in ~/.ssh/config, or ssh will not use it.")
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,14 +102,14 @@ struct SSHServerPicker: View {
 
                 LabeledContent(tr("免密登录", "Passwordless Login")) {
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            if publicKeys.count > 1 {
-                                Picker("", selection: $selectedKey) {
-                                    ForEach(publicKeys, id: \.self) { Text(($0 as NSString).lastPathComponent).tag($0) }
-                                }
-                                .labelsHidden()
-                                .frame(width: 170)
+                        if publicKeys.count > 1 {
+                            Picker("", selection: $selectedKey) {
+                                ForEach(publicKeys) { Text($0.label).tag($0.path) }
                             }
+                            .labelsHidden()
+                            .frame(width: 400)
+                        }
+                        HStack(spacing: 8) {
                             Button(tr("安装密钥…", "Install Key…")) {
                                 ActionLauncher.installSSHKey(alias: alias, publicKey: selectedKey)
                                 keyNotice = tr(
@@ -106,15 +118,13 @@ struct SSHServerPicker: View {
                                 )
                             }
                             .disabled(!isValid || selectedKey.isEmpty)
+                            Spacer(minLength: 0)
                         }
-                        Text(keyNotice ?? tr(
-                            "在终端运行一次 ssh-copy-id，输入一次密码后即可免密连接。",
-                            "Runs ssh-copy-id once in Terminal: enter the password one time, then connect without it."
-                        ))
+                        Text(keyNotice ?? defaultKeyHint)
                         .font(.caption)
-                        .foregroundStyle(keyNotice == nil ? Color.secondary : Color.green)
+                        .foregroundStyle(keyNotice == nil ? (isDefaultKeySelected ? Color.secondary : Color.orange) : Color.green)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 300, alignment: .leading)
+                        .frame(maxWidth: 320, alignment: .leading)
                     }
                 }
             }
@@ -147,8 +157,8 @@ struct SSHServerPicker: View {
         .task {
             hosts = SSHConfig.hosts()
             selection = hosts.first?.alias
-            publicKeys = ActionLauncher.availablePublicKeys()
-            selectedKey = publicKeys.first ?? ""
+            publicKeys = SSHPublicKey.available()
+            selectedKey = publicKeys.first?.path ?? ""
         }
     }
 

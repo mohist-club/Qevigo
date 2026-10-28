@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import SwiftUI
 import KeyboardShortcuts
 import QevigoCore
 

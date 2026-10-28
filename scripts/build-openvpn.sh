@@ -107,9 +107,12 @@ build_arch() {
     tar xzf "$WORK/openvpn-$OPENVPN_VERSION.tar.gz" -C "$WORK/openvpn-$arch" --strip-components=1
     (
         cd "$WORK/openvpn-$arch"
-        # No pkcs11, no plugins: those would pull in dynamic libraries again.
+        # Everything optional is off: a plugin, pkcs11 or lz4 found on the build
+        # machine would be linked dynamically and the binary would stop being
+        # self-contained. Compression stays available through the LZO built above.
+        PKG_CONFIG_PATH="" PKG_CONFIG_LIBDIR="$prefix/lib/pkgconfig" \
         ./configure --host="$host" --disable-plugins --disable-pkcs11 --disable-selinux \
-            --disable-systemd --disable-dependency-tracking \
+            --disable-systemd --disable-dependency-tracking --disable-lz4 \
             CFLAGS="$flags -I$prefix/include" \
             LDFLAGS="$flags -L$prefix/lib" \
             OPENSSL_CFLAGS="-I$prefix/include" \
@@ -148,6 +151,12 @@ fi
 echo "==> verify"
 file "$OUT/openvpn-universal" | sed 's/^/    /'
 otool -L "$OUT/openvpn-universal" | tail -n +2 | sed 's/^/    links: /'
+# The whole point is that it runs on a Mac with nothing installed, so a link to
+# anything outside the system libraries is a failure, not a warning.
+if otool -L "$OUT/openvpn-universal" | tail -n +2 | grep -vqE '^[[:space:]]+(/usr/lib/|/System/)'; then
+    echo "error: links to a library outside the system; the binary is not self-contained" >&2
+    exit 1
+fi
 "$OUT/openvpn-universal" --version | head -2 | sed 's/^/    /'
 echo "    size   $(du -h "$OUT/openvpn-universal" | cut -f1)"
 echo "    sha256 $(shasum -a 256 "$OUT/openvpn-universal" | cut -d' ' -f1)"

@@ -26,6 +26,7 @@ public enum OpenVPN {
             return preferred
         }
         if let installed = binaryCandidates.first(where: exists) { return installed }
+        if exists(managedBinaryPath) { return managedBinaryPath }
         // Tunnelblick ships openvpn builds; reuse one rather than installing a second copy.
         return bundled().first(where: exists)
     }
@@ -72,6 +73,38 @@ public enum OpenVPN {
     public static func isOpenVPNVersionOutput(_ output: String) -> Bool {
         output.hasPrefix("OpenVPN ") || output.contains("OpenVPN 2.")
     }
+
+    /// The engine Qevigo downloads for users who have no openvpn at all.
+    /// Pinning the digest in the app means a replaced download is refused.
+    public struct Engine: Sendable {
+        public let version: String
+        public let url: URL
+        public let sha256: String
+        public let approximateSize: String
+
+        public init(version: String, url: URL, sha256: String, approximateSize: String) {
+            self.version = version
+            self.url = url
+            self.sha256 = sha256
+            self.approximateSize = approximateSize
+        }
+    }
+
+    /// Built by .github/workflows/openvpn-engine.yml from pinned sources.
+    public static let downloadableEngine = Engine(
+        version: "2.7.8",
+        url: URL(string: "https://github.com/mohist-club/Qevigo/releases/download/openvpn-2.7.8/openvpn-universal")!,
+        sha256: "PENDING",
+        approximateSize: "3 MB"
+    )
+
+    /// Where a downloaded engine lives. Beside the configurations, so one
+    /// directory holds everything Qevigo manages for VPNs.
+    public static var managedBinaryPath: String {
+        (NSHomeDirectory() as NSString).appendingPathComponent(".qevigo/bin/openvpn")
+    }
+
+    public static var isEngineDownloadable: Bool { downloadableEngine.sha256 != "PENDING" }
 
     /// Configurations live outside Application Support because that path
     /// contains a space, which sudoers rules cannot express safely.

@@ -18,6 +18,7 @@ struct VPNConfigPicker: View {
     @State private var engineNote: String?
     @State private var engineTick = 0
     @State private var rulesCurrent = true
+    @StateObject private var installer = VPNEngineInstaller()
 
     private var binaryPath: String? { VPNService.binary() }
     private var brewPath: String? { OpenVPN.installedBrew() }
@@ -43,19 +44,48 @@ struct VPNConfigPicker: View {
                             }
                         } else {
                             StatusChip(title: tr("未安装", "Not installed"), isGood: false)
-                            HStack(spacing: 8) {
-                                Button(installButtonTitle) { installEngine() }
-                                Button(tr("指定已有的 openvpn…", "Choose Existing openvpn…")) { chooseBinary() }
-                            }
-                            FormNote(brewPath == nil
-                                ? tr(
-                                    "这台 Mac 还没有 Homebrew，将先安装它再装 openvpn。Homebrew 需要 Xcode 命令行工具，首次安装要下载 1 GB 以上、可能需要十几分钟。已经用别的方式装过 openvpn 的话，请用右边的按钮直接指定。",
-                                    "This Mac has no Homebrew, so it is installed first. Homebrew needs the Xcode Command Line Tools: over 1 GB on a first install and it can take a while. If openvpn is already installed another way, point at it instead."
-                                )
-                                : tr(
-                                    "将通过 Homebrew 安装 openvpn（约 1 MB，在终端里进行）。openvpn 命令行本身就是完整客户端，不需要图形版。",
-                                    "Installs openvpn through Homebrew (about 1 MB) in Terminal. The openvpn CLI is a complete client, no GUI app needed."
+                            if OpenVPN.isEngineDownloadable {
+                                HStack(spacing: 8) {
+                                    Button(tr("下载引擎（约 \(OpenVPN.downloadableEngine.approximateSize)）", "Download Engine (about \(OpenVPN.downloadableEngine.approximateSize))")) {
+                                        Task { await installer.install() }
+                                    }
+                                    .disabled(installer.isWorking)
+                                    if case .downloading(let progress) = installer.state {
+                                        ProgressView(value: progress).frame(width: 90)
+                                    } else if case .verifying = installer.state {
+                                        ProgressView().controlSize(.small)
+                                    }
+                                    Button(tr("指定已有的 openvpn…", "Choose Existing…")) { chooseBinary() }
+                                }
+                                FormNote(tr(
+                                    "下载一个自带所需组件的 openvpn（校验哈希后安装到 ~/.qevigo/bin/），不需要 Homebrew，也不需要其他 VPN 客户端。",
+                                    "Downloads a self-contained openvpn, checked against a pinned hash and installed in ~/.qevigo/bin/. No Homebrew and no other VPN client needed."
                                 ))
+                                DisclosureGroup(tr("用 Homebrew 安装（需要 Xcode 命令行工具）", "Install with Homebrew (needs Xcode command line tools)")) {
+                                    Button(installButtonTitle) { installEngine() }
+                                        .padding(.top, 2)
+                                }
+                                .font(.caption)
+                                .frame(maxWidth: 360, alignment: .leading)
+                            } else {
+                                HStack(spacing: 8) {
+                                    Button(installButtonTitle) { installEngine() }
+                                    Button(tr("指定已有的 openvpn…", "Choose Existing openvpn…")) { chooseBinary() }
+                                }
+                                FormNote(brewPath == nil
+                                    ? tr(
+                                        "这台 Mac 还没有 Homebrew，将先安装它再装 openvpn。Homebrew 需要 Xcode 命令行工具，首次安装要下载 1 GB 以上、可能需要十几分钟。已经用别的方式装过 openvpn 的话，请用右边的按钮直接指定。",
+                                        "This Mac has no Homebrew, so it is installed first. Homebrew needs the Xcode Command Line Tools: over 1 GB on a first install and it can take a while. If openvpn is already installed another way, point at it instead."
+                                    )
+                                    : tr(
+                                        "将通过 Homebrew 安装 openvpn（约 1 MB，在终端里进行）。openvpn 命令行本身就是完整客户端，不需要图形版。",
+                                        "Installs openvpn through Homebrew (about 1 MB) in Terminal. The openvpn CLI is a complete client, no GUI app needed."
+                                    ))
+                            }
+                            if case .failed(let message) = installer.state {
+                                Text(message).font(.caption).foregroundStyle(.red)
+                                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 360, alignment: .leading)
+                            }
                             if let engineNote {
                                 Text(engineNote).font(.caption).foregroundStyle(.orange)
                                     .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 360, alignment: .leading)
@@ -135,6 +165,9 @@ struct VPNConfigPicker: View {
             rulesCurrent = VPNService.rulesCover(bindings: existing)
         }
         .id(engineTick)
+        .onChange(of: installer.state) { _, state in
+            if case .installed = state { engineTick += 1 }
+        }
         .task {
             // The install runs in Terminal, so watch for the binary appearing.
             while !Task.isCancelled {

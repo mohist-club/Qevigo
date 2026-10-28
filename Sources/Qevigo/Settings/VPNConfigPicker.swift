@@ -225,10 +225,13 @@ struct VPNConfigPicker: View {
             engineNote = tr("需要先装好 openvpn 引擎。", "The openvpn engine has to be installed first.")
             return
         }
-        VPNService.openInTerminal(command: command, note: tr(
-            "输入你的 Mac 密码以启用免密连接（只需这一次）。",
-            "Enter your Mac password once to enable passwordless connections."
-        ))
+        Task {
+            let installed = await VPNService.runAsAdministrator(
+                command: command.replacingOccurrences(of: "sudo ", with: ""),
+                describing: tr("配置免密", "Setting up passwordless access")
+            )
+            if installed { refreshStatus() }
+        }
     }
 
     private func refreshStatus() {
@@ -297,10 +300,12 @@ struct VPNConfigPicker: View {
             onPick(binding)
             // Rules name every managed config, so they are rebuilt with this one included.
             if let command = VPNConfigStore.sudoersInstallCommand(for: existing + [binding]) {
-                VPNService.openInTerminal(command: command, note: tr(
-                    "输入你的 Mac 密码以启用免密连接（只需这一次）。",
-                    "Enter your Mac password once to enable passwordless connections."
-                ))
+                Task {
+                    await VPNService.runAsAdministrator(
+                        command: command.replacingOccurrences(of: "sudo ", with: ""),
+                        describing: tr("配置免密", "Setting up passwordless access")
+                    )
+                }
             }
             dismiss()
         } catch {

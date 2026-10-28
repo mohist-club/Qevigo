@@ -143,12 +143,23 @@ enum VPNService {
                 _ = try await ActionLauncher.runSpec(spec)
                 if let config { await reportOutcome(config: config, action: action) }
             } catch {
-                openInTerminal(fallback, note: tr(
-                    "请在终端里输入你的 Mac 密码以\(action)。",
-                    "Enter your Mac password in Terminal to continue."
-                ))
+                await authorizeAndRun(fallback, describing: action)
+                if let config { await reportOutcome(config: config, action: action) }
             }
         }
+    }
+
+    /// Asks for authorisation once and, while it is granted, also installs the
+    /// passwordless rules so later connects and disconnects need nothing.
+    private static func authorizeAndRun(_ spec: ShortcutExecutionSpec, describing action: String) async {
+        let command = ([spec.executable] + spec.arguments.filter { $0 != "-n" }).map(quoteForShell).joined(separator: " ")
+        let bindings = AppEnvironment.shared.settings.bindings
+        var full = command
+        if !rulesCover(bindings: bindings), let install = VPNConfigStore.sudoersInstallCommand(for: bindings) {
+            // Separated by ';' so the action still runs if the rules fail.
+            full = install.replacingOccurrences(of: "sudo ", with: "") + " ; " + command
+        }
+        await runAsAdministrator(command: full, describing: action)
     }
 
     /// openvpn daemonises immediately, so success is judged by the log: it
@@ -172,6 +183,29 @@ enum VPNService {
             "\(action)超时（20 秒内没有建立隧道）。日志：\(logPath)",
             "\(action) timed out after 20s. Log: \(logPath)"
         ))
+    }
+
+    /// Runs a command as root behind the system's own authorisation dialog.
+    /// The password is typed into that dialog, so it never reaches Qevigo, and
+    /// no Terminal window — nor permission to control Terminal — is involved.
+    /// Returns false when the user cancels or the command fails.
+    @discardableResult
+    static func runAsAdministrator(command: String, describing action: String) async -> Bool {
+        let script = "do shell script \(appleScriptString(command)) with administrator privileges"
+        // The dialog blocks, so it runs off the main actor; only the plain
+        // values come back.
+        let outcome: (code: Int, message: String)? = await Task.detached {
+            var error: NSDictionary?
+            NSAppleScript(source: script)?.executeAndReturnError(&error)
+            guard let error else { return nil }
+            return (error[NSAppleScript.errorNumber] as? Int ?? 0,
+                    error[NSAppleScript.errorMessage] as? String ?? "")
+        }.value
+        guard let outcome else { return true }
+        // -128 is the user dismissing the dialog, which needs no explanation.
+        if outcome.code == -128 { return false }
+        present(tr("\(action)失败：\(outcome.message)", "\(action) failed: \(outcome.message)"))
+        return false
     }
 
     /// Runs a command in Terminal, where sudo can prompt for a password.

@@ -22,7 +22,7 @@ macOS 菜单栏划词翻译：选中文字，按一下全局快捷键，弹出�
 - **SSH 服务器**：从 `~/.ssh/config` 读取主机列表，一个快捷键连上；可选用系统终端或 VS Code Remote-SSH 打开，并能一键运行 `ssh-copy-id` 配置免密登录（密码只在终端里输一次，Qevigo 不保存）
 - **OpenVPN**：在设置里选择 `.ovpn` 配置文件，一个快捷键连接 / 断开（同一个配置只会有一条隧道；断不开时会按配置路径强制结束）。使用 `openvpn` 命令行引擎（不需要图形客户端）。设置里会按以下顺序找它：手动指定的路径 → Homebrew / MacPorts 等常见位置 → 下载到 `~/.qevigo/bin/` 的引擎 → Tunnelblick 自带的 openvpn。都没有时，点一下即可下载我们预编译的引擎（14 MB，自包含，**不需要 Homebrew 和 Xcode 命令行工具**），下载内容会与 App 内固定的 SHA-256 比对，不符则丢弃。也可以改用 Homebrew 安装。
 
-预编译引擎由 [.github/workflows/openvpn-engine.yml](.github/workflows/openvpn-engine.yml) 在 GitHub Actions 上从官方源码构建：openvpn 与 OpenSSL、LZO 静态链接，源码包的校验和固定在 [scripts/build-openvpn.sh](scripts/build-openvpn.sh) 里，构建产物会验证不依赖系统以外的任何库。openvpn 为 GPL-2.0，发布页附有版本、校验和与构建脚本链接。建隧道需要管理员权限，可一键在终端里配置一次免密（规则写在 `/etc/sudoers.d/qevigo-openvpn`，与实际执行的命令逐字匹配），之后按快捷键直接连接
+预编译引擎由 [.github/workflows/openvpn-engine.yml](.github/workflows/openvpn-engine.yml) 在 GitHub Actions 上从官方源码构建：openvpn 与 OpenSSL、LZO 静态链接，源码包的校验和固定在 [scripts/build-openvpn.sh](scripts/build-openvpn.sh) 里，构建产物会验证不依赖系统以外的任何库。openvpn 为 GPL-2.0，发布页附有版本、校验和与构建脚本链接。建隧道需要管理员权限：Qevigo 通过系统原生授权对话框请求一次（密码交给系统，不经过 Qevigo），同时写入免密规则（规则写在 `/etc/sudoers.d/qevigo-openvpn`，与实际执行的命令逐字匹配），之后按快捷键直接连接
 - 浮窗可拖动、缩放、记住位置和大小、可锁定；朗读、复制、互换语言；浅色 / 深色 / 自动；中英文界面
 - 检测到旧版配置时可一键导入（服务、API Key、快捷键、偏好）：设置 → 高级
 

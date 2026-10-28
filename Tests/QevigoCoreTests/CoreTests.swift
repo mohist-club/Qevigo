@@ -648,3 +648,31 @@ final class OpenVPNBundledBinaryTests: XCTestCase {
         XCTAssertNil(OpenVPN.installedBinary(checking: { _ in false }, bundled: { [] }))
     }
 }
+
+final class OpenVPNEngineTests: XCTestCase {
+    func testTheDownloadableEngineIsPinned() {
+        let engine = OpenVPN.downloadableEngine
+        XCTAssertTrue(OpenVPN.isEngineDownloadable, "a release without a real digest must not be offered")
+        XCTAssertEqual(engine.sha256.count, 64, "a SHA-256 digest in hex")
+        XCTAssertTrue(engine.sha256.allSatisfy { $0.isHexDigit })
+        XCTAssertEqual(engine.url.scheme, "https", "the engine runs as root; plain http would be a downgrade")
+        XCTAssertTrue(engine.url.absoluteString.contains(engine.version), "the URL names the version it serves")
+    }
+
+    func testTheManagedEngineIsFoundWhenNothingElseIs() {
+        XCTAssertEqual(
+            OpenVPN.installedBinary(checking: { $0 == OpenVPN.managedBinaryPath }, bundled: { [] }),
+            OpenVPN.managedBinaryPath
+        )
+        // Something installed by the user still wins, so a brew upgrade keeps working.
+        XCTAssertEqual(
+            OpenVPN.installedBinary(checking: { $0 == "/opt/homebrew/sbin/openvpn" || $0 == OpenVPN.managedBinaryPath }, bundled: { [] }),
+            "/opt/homebrew/sbin/openvpn"
+        )
+    }
+
+    func testManagedEngineLivesBesideTheConfigurations() {
+        XCTAssertTrue(OpenVPN.managedBinaryPath.hasSuffix("/.qevigo/bin/openvpn"))
+        XCTAssertFalse(OpenVPN.managedBinaryPath.contains(" "), "sudoers rules cannot express a path with spaces")
+    }
+}

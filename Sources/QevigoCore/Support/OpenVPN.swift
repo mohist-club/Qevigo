@@ -94,8 +94,8 @@ public enum OpenVPN {
     public static let downloadableEngine = Engine(
         version: "2.7.8",
         url: URL(string: "https://github.com/mohist-club/Qevigo/releases/download/openvpn-2.7.8/openvpn-universal")!,
-        sha256: "PENDING",
-        approximateSize: "3 MB"
+        sha256: "dc502a774b13714bcd2ffef2f3c90205ff5bcb3c2b49dbdcce713d98d89d4d31",
+        approximateSize: "14 MB"
     )
 
     /// Where a downloaded engine lives. Beside the configurations, so one

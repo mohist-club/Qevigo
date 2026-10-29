@@ -58,7 +58,7 @@ final class ShortcutHUD {
     }
 
     private func makePanel() -> NSPanel {
-        let side = HUDContentView.side
+        let side = HUDContentView.windowSide
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: side, height: side),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -80,12 +80,15 @@ final class ShortcutHUD {
     /// Centred in the upper part of the screen the pointer is on, clear of
     /// whatever is being worked on lower down.
     private func placement() -> NSRect {
-        let side = HUDContentView.side
+        let side = HUDContentView.windowSide
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         guard let frame = screen?.visibleFrame else { return NSRect(x: 0, y: 0, width: side, height: side) }
+        // The glass sits inside a transparent margin, so the position is
+        // worked out for the glass and the window is grown around it.
+        let margin = HUDContentView.margin
         return NSRect(
             x: frame.midX - side / 2,
-            y: frame.maxY - frame.height * 0.16 - side,
+            y: frame.maxY - frame.height * 0.16 - HUDContentView.side - margin,
             width: side,
             height: side
         )
@@ -93,25 +96,31 @@ final class ShortcutHUD {
 }
 
 private final class HUDContentView: NSView {
-    /// A square of about 16,200pt², the size that reads clearly without
+    /// A square of about 16,400pt², the size that reads clearly without
     /// covering what is underneath.
     static let side: CGFloat = 128
+    /// Transparent room around the glass. Without it the window clips the
+    /// shadow and edge highlight the material draws outside its own bounds,
+    /// which is what flattens it into a plain grey square.
+    static let margin: CGFloat = 22
+    static var windowSide: CGFloat { side + margin * 2 }
 
     private let symbolView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
     private let content = NSView()
+    private let shadowView = NSView()
     private var background: NSView!
     private var glassView: NSView?
 
-    private static let iconSide: CGFloat = 44
-    private static let inset: CGFloat = 10
-    private static let iconToTitle: CGFloat = 10
+    private static let iconSide: CGFloat = 50
+    private static let inset: CGFloat = 14
+    private static let iconToTitle: CGFloat = 12
     /// A squircle rather than a circle, in the proportion the system HUDs use.
     private static let radiusRatio: CGFloat = 0.22
 
     init() {
-        super.init(frame: NSRect(x: 0, y: 0, width: Self.side, height: Self.side))
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.windowSide, height: Self.windowSide))
         wantsLayer = true
 
         // Liquid Glass where the system has it. The material carries the
@@ -143,8 +152,25 @@ private final class HUDContentView: NSView {
             effect.layer?.masksToBounds = true
             background = effect
         }
+        // A soft drop shadow of its own, so the square lifts off whatever is
+        // behind it instead of sitting flat against it. The layer has no
+        // content — only the shadow its path casts — so the glass above stays
+        // see-through.
+        // Set through NSView.shadow rather than on the layer: AppKit keeps a
+        // layer-backed view's shadow in step with this property and zeroes
+        // anything written straight to the layer, leaving no shadow at all.
+        // The strength lives in the colour's alpha.
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.16)
+        shadow.shadowBlurRadius = 14
+        shadow.shadowOffset = NSSize(width: 0, height: -5)
+        shadowView.wantsLayer = true
+        shadowView.shadow = shadow
+        shadowView.layer?.masksToBounds = false
+        addSubview(shadowView)
+
         background.autoresizingMask = [.width, .height]
-        background.frame = bounds
+        background.frame = bounds.insetBy(dx: Self.margin, dy: Self.margin)
         addSubview(background)
         self.background = background
 
@@ -152,7 +178,7 @@ private final class HUDContentView: NSView {
         symbolView.contentTintColor = .labelColor
 
         titleLabel.alignment = .center
-        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
 
@@ -165,7 +191,7 @@ private final class HUDContentView: NSView {
         // NSGlassEffectView refracts whatever sits in its contentView, so the
         // icon and labels go there rather than on top of it.
         content.autoresizingMask = [.width, .height]
-        content.frame = bounds
+        content.frame = bounds.insetBy(dx: Self.margin, dy: Self.margin)
         if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
             glass.contentView = content
         } else {
@@ -181,7 +207,7 @@ private final class HUDContentView: NSView {
             symbolView.image = image
             symbolView.contentTintColor = nil
         } else {
-            let configuration = NSImage.SymbolConfiguration(pointSize: 30, weight: .regular)
+                let configuration = NSImage.SymbolConfiguration(pointSize: 34, weight: .regular)
             symbolView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
                 .withSymbolConfiguration(configuration)
             symbolView.contentTintColor = .labelColor
@@ -194,24 +220,32 @@ private final class HUDContentView: NSView {
 
     override func layout() {
         super.layout()
-        // Keeping the radius proportional holds the shape while the square
-        // grows into place.
-        let radius = min(bounds.width, bounds.height) * Self.radiusRatio
+        // The glass keeps the margin on every side as the window grows into
+        // place, so the proportions hold through the animation.
+        let scale = bounds.width / Self.windowSide
+        let square = bounds.insetBy(dx: Self.margin * scale, dy: Self.margin * scale)
+        let radius = min(square.width, square.height) * Self.radiusRatio
         if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
-            glass.frame = bounds
+            background.frame = square
+            glass.frame = NSRect(origin: .zero, size: square.size)
             glass.cornerRadius = radius
         } else {
+            background.frame = square
             background.layer?.cornerRadius = radius
         }
-        content.frame = bounds
+        content.frame = NSRect(origin: .zero, size: square.size)
+        shadowView.frame = square
+        shadowView.layer?.shadowPath = NSBezierPath(
+            roundedRect: NSRect(origin: .zero, size: square.size), xRadius: radius, yRadius: radius
+        ).cgPath
 
         let titleHeight = ceil(titleLabel.fittingSize.height)
         let subtitleHeight = subtitleLabel.isHidden ? 0 : ceil(subtitleLabel.fittingSize.height)
         let block = Self.iconSide + Self.iconToTitle + titleHeight + (subtitleLabel.isHidden ? 0 : subtitleHeight + 1)
-        let top = (bounds.height + block) / 2
-        let width = bounds.width - Self.inset * 2
+        let top = (square.height + block) / 2
+        let width = square.width - Self.inset * 2
 
-        symbolView.frame = NSRect(x: (bounds.width - Self.iconSide) / 2, y: top - Self.iconSide,
+        symbolView.frame = NSRect(x: (square.width - Self.iconSide) / 2, y: top - Self.iconSide,
                                   width: Self.iconSide, height: Self.iconSide)
         titleLabel.frame = NSRect(x: Self.inset, y: top - Self.iconSide - Self.iconToTitle - titleHeight,
                                   width: width, height: titleHeight)

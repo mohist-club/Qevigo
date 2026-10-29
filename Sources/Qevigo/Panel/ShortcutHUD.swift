@@ -1,8 +1,8 @@
 import AppKit
 
 /// The brief overlay a shortcut shows so you can tell it did something — a
-/// small glass pill near the top of the screen, in the shape the system uses
-/// for its own transient banners. Not used for translation, where the
+/// small square of glass near the top of the screen, the shape macOS uses for
+/// its own volume and brightness panels. Not used for translation, where the
 /// translation window is the feedback.
 @MainActor
 final class ShortcutHUD {
@@ -19,9 +19,10 @@ final class ShortcutHUD {
     func show(symbol: String, title: String, subtitle: String? = nil, image: NSImage? = nil) {
         let panel = panel ?? makePanel()
         self.panel = panel
-        guard let content = panel.contentView as? HUDContentView else { return }
-        let size = content.update(symbol: symbol, title: title, subtitle: subtitle, image: image)
-        let target = placement(for: size)
+        (panel.contentView as? HUDContentView)?.update(
+            symbol: symbol, title: title, subtitle: subtitle, image: image
+        )
+        let target = placement()
 
         dismissal?.cancel()
         // Liquid Glass refracts what is behind it only while the window itself
@@ -29,8 +30,8 @@ final class ShortcutHUD {
         // slab, so transparency is left to the glass material.
         //
         // It grows into place rather than appearing outright: the glass keeps
-        // its capsule as the pill resizes, which is the part that reads as
-        // liquid.
+        // its proportions as the square resizes, which is the part that reads
+        // as liquid.
         panel.setFrame(target.insetBy(dx: target.width * 0.05, dy: target.height * 0.05), display: false)
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -57,8 +58,9 @@ final class ShortcutHUD {
     }
 
     private func makePanel() -> NSPanel {
+        let side = HUDContentView.side
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 200, height: HUDContentView.height),
+            contentRect: NSRect(x: 0, y: 0, width: side, height: side),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -77,20 +79,23 @@ final class ShortcutHUD {
 
     /// Centred in the upper part of the screen the pointer is on, clear of
     /// whatever is being worked on lower down.
-    private func placement(for size: NSSize) -> NSRect {
+    private func placement() -> NSRect {
+        let side = HUDContentView.side
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
-        guard let frame = screen?.visibleFrame else { return NSRect(origin: .zero, size: size) }
+        guard let frame = screen?.visibleFrame else { return NSRect(x: 0, y: 0, width: side, height: side) }
         return NSRect(
-            x: frame.midX - size.width / 2,
-            y: frame.maxY - frame.height * 0.16 - size.height,
-            width: size.width,
-            height: size.height
+            x: frame.midX - side / 2,
+            y: frame.maxY - frame.height * 0.16 - side,
+            width: side,
+            height: side
         )
     }
 }
 
 private final class HUDContentView: NSView {
-    static let height: CGFloat = 72
+    /// A square of about 16,200pt², the size that reads clearly without
+    /// covering what is underneath.
+    static let side: CGFloat = 128
 
     private let symbolView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
@@ -99,14 +104,14 @@ private final class HUDContentView: NSView {
     private var background: NSView!
     private var glassView: NSView?
 
-    private static let iconSide: CGFloat = 38
-    private static let leading: CGFloat = 16
-    private static let gap: CGFloat = 14
-    private static let trailing: CGFloat = 20
-    private static let widthRange: ClosedRange<CGFloat> = 225...380
+    private static let iconSide: CGFloat = 44
+    private static let inset: CGFloat = 10
+    private static let iconToTitle: CGFloat = 10
+    /// A squircle rather than a circle, in the proportion the system HUDs use.
+    private static let radiusRatio: CGFloat = 0.22
 
     init() {
-        super.init(frame: NSRect(x: 0, y: 0, width: 200, height: Self.height))
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.side, height: Self.side))
         wantsLayer = true
 
         // Liquid Glass where the system has it. The material carries the
@@ -115,12 +120,12 @@ private final class HUDContentView: NSView {
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             glass.style = .regular
-            glass.cornerRadius = Self.height / 2
+            glass.cornerRadius = Self.side * Self.radiusRatio
             if #available(macOS 27.0, *) {
                 // Lets the material react to what moves behind and under it.
                 glass.effectIsInteractive = true
             }
-            self.glassView = glass
+            glassView = glass
             // Glass renders through a container, which is what blends nearby
             // glass shapes into one another rather than stacking them.
             let container = NSGlassEffectContainerView()
@@ -133,7 +138,7 @@ private final class HUDContentView: NSView {
             effect.blendingMode = .behindWindow
             effect.state = .active
             effect.wantsLayer = true
-            effect.layer?.cornerRadius = Self.height / 2
+            effect.layer?.cornerRadius = Self.side * Self.radiusRatio
             effect.layer?.cornerCurve = .continuous
             effect.layer?.masksToBounds = true
             background = effect
@@ -146,11 +151,13 @@ private final class HUDContentView: NSView {
         symbolView.imageScaling = .scaleProportionallyUpOrDown
         symbolView.contentTintColor = .labelColor
 
-        titleLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        titleLabel.alignment = .center
+        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
 
-        subtitleLabel.font = .systemFont(ofSize: 12)
+        subtitleLabel.alignment = .center
+        subtitleLabel.font = .systemFont(ofSize: 11)
         subtitleLabel.textColor = .secondaryLabelColor
         subtitleLabel.lineBreakMode = .byTruncatingTail
         subtitleLabel.maximumNumberOfLines = 1
@@ -169,13 +176,12 @@ private final class HUDContentView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Fills in the pill and reports the width it needs, so it hugs its text.
-    func update(symbol: String, title: String, subtitle: String?, image: NSImage?) -> NSSize {
+    func update(symbol: String, title: String, subtitle: String?, image: NSImage?) {
         if let image {
             symbolView.image = image
             symbolView.contentTintColor = nil
         } else {
-            let configuration = NSImage.SymbolConfiguration(pointSize: 26, weight: .regular)
+            let configuration = NSImage.SymbolConfiguration(pointSize: 30, weight: .regular)
             symbolView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
                 .withSymbolConfiguration(configuration)
             symbolView.contentTintColor = .labelColor
@@ -183,42 +189,32 @@ private final class HUDContentView: NSView {
         titleLabel.stringValue = title
         subtitleLabel.stringValue = subtitle ?? ""
         subtitleLabel.isHidden = subtitle == nil
-
-        let text = max(width(of: titleLabel), width(of: subtitleLabel))
-        let width = Self.leading + Self.iconSide + Self.gap + text + Self.trailing
-        let size = NSSize(width: min(max(width, Self.widthRange.lowerBound), Self.widthRange.upperBound),
-                          height: Self.height)
-        setFrameSize(size)
-        return size
-    }
-
-    private func width(of label: NSTextField) -> CGFloat {
-        guard !label.isHidden, let font = label.font else { return 0 }
-        return ceil((label.stringValue as NSString).size(withAttributes: [.font: font]).width)
+        needsLayout = true
     }
 
     override func layout() {
         super.layout()
+        // Keeping the radius proportional holds the shape while the square
+        // grows into place.
+        let radius = min(bounds.width, bounds.height) * Self.radiusRatio
         if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
             glass.frame = bounds
-            glass.cornerRadius = bounds.height / 2
-        } else if let layer = background.layer {
-            layer.cornerRadius = bounds.height / 2
+            glass.cornerRadius = radius
+        } else {
+            background.layer?.cornerRadius = radius
         }
         content.frame = bounds
-        symbolView.frame = NSRect(x: Self.leading, y: (bounds.height - Self.iconSide) / 2,
-                                  width: Self.iconSide, height: Self.iconSide)
-        let x = Self.leading + Self.iconSide + Self.gap
-        let available = max(bounds.width - x - Self.trailing, 0)
+
         let titleHeight = ceil(titleLabel.fittingSize.height)
-        if subtitleLabel.isHidden {
-            titleLabel.frame = NSRect(x: x, y: (bounds.height - titleHeight) / 2, width: available, height: titleHeight)
-        } else {
-            let subtitleHeight = ceil(subtitleLabel.fittingSize.height)
-            let block = titleHeight + subtitleHeight
-            let top = (bounds.height + block) / 2
-            titleLabel.frame = NSRect(x: x, y: top - titleHeight, width: available, height: titleHeight)
-            subtitleLabel.frame = NSRect(x: x, y: top - block - 1, width: available, height: subtitleHeight)
-        }
+        let subtitleHeight = subtitleLabel.isHidden ? 0 : ceil(subtitleLabel.fittingSize.height)
+        let block = Self.iconSide + Self.iconToTitle + titleHeight + (subtitleLabel.isHidden ? 0 : subtitleHeight + 1)
+        let top = (bounds.height + block) / 2
+        let width = bounds.width - Self.inset * 2
+
+        symbolView.frame = NSRect(x: (bounds.width - Self.iconSide) / 2, y: top - Self.iconSide,
+                                  width: Self.iconSide, height: Self.iconSide)
+        titleLabel.frame = NSRect(x: Self.inset, y: top - Self.iconSide - Self.iconToTitle - titleHeight,
+                                  width: width, height: titleHeight)
+        subtitleLabel.frame = NSRect(x: Self.inset, y: top - block, width: width, height: subtitleHeight)
     }
 }

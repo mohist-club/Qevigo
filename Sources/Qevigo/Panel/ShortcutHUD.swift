@@ -110,6 +110,7 @@ private final class HUDContentView: NSView {
     private let subtitleLabel = NSTextField(labelWithString: "")
     private let content = NSView()
     private let shadowView = NSView()
+    private let shadowMask = CAShapeLayer()
     private var background: NSView!
     private var glassView: NSView?
 
@@ -129,6 +130,11 @@ private final class HUDContentView: NSView {
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             glass.style = .regular
+            // The panel never becomes key, so the material renders in its
+            // quieter inactive form. A light tint brings it back up to the
+            // brightness of the system's own overlays, and stays out of the
+            // way in dark mode.
+            glass.tintColor = Self.tint
             glass.cornerRadius = Self.side * Self.radiusRatio
             if #available(macOS 27.0, *) {
                 // Lets the material react to what moves behind and under it.
@@ -161,12 +167,16 @@ private final class HUDContentView: NSView {
         // anything written straight to the layer, leaving no shadow at all.
         // The strength lives in the colour's alpha.
         let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.16)
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.18)
         shadow.shadowBlurRadius = 14
         shadow.shadowOffset = NSSize(width: 0, height: -5)
         shadowView.wantsLayer = true
         shadowView.shadow = shadow
         shadowView.layer?.masksToBounds = false
+        // The part of the shadow that falls under the square is masked away.
+        // The material is translucent, so a shadow left there shows straight
+        // through it and dulls the whole panel.
+        shadowView.layer?.mask = shadowMask
         addSubview(shadowView)
 
         background.autoresizingMask = [.width, .height]
@@ -202,6 +212,12 @@ private final class HUDContentView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    private static let tint = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor.white.withAlphaComponent(0.06)
+            : NSColor.white.withAlphaComponent(0.34)
+    }
+
     func update(symbol: String, title: String, subtitle: String?, image: NSImage?) {
         if let image {
             symbolView.image = image
@@ -234,10 +250,17 @@ private final class HUDContentView: NSView {
             background.layer?.cornerRadius = radius
         }
         content.frame = NSRect(origin: .zero, size: square.size)
-        shadowView.frame = square
-        shadowView.layer?.shadowPath = NSBezierPath(
-            roundedRect: NSRect(origin: .zero, size: square.size), xRadius: radius, yRadius: radius
-        ).cgPath
+        // The shadow view spans the window so its mask can reach the spill
+        // outside the square.
+        shadowView.frame = bounds
+        let shape = NSBezierPath(roundedRect: square, xRadius: radius, yRadius: radius)
+        shadowView.layer?.shadowPath = shape.cgPath
+        let hole = NSBezierPath(rect: bounds)
+        hole.append(shape)
+        hole.windingRule = .evenOdd
+        shadowMask.frame = bounds
+        shadowMask.fillRule = .evenOdd
+        shadowMask.path = hole.cgPath
 
         let titleHeight = ceil(titleLabel.fittingSize.height)
         let subtitleHeight = subtitleLabel.isHidden ? 0 : ceil(subtitleLabel.fittingSize.height)

@@ -727,6 +727,11 @@ final class VPNStatisticsTests: XCTestCase {
         utun6      1500  <Link#21>                         1200     0    3456789     1100     0    1234567     0
         utun6      1500  10.8.0/24     10.8.0.6              1200     -    3456789     1100     -    1234567     -
         """
+        // Without -n netstat resolves addresses through DNS, which is slow
+        // enough to stall the menu while it samples.
+        XCTAssertTrue(VPNStatistics.trafficCommand.arguments.contains("-ibn")
+                      || VPNStatistics.trafficCommand.arguments.contains("-n"),
+                      "netstat must be told not to resolve names")
         let traffic = VPNStatistics.traffic(netstat: output, interface: "utun6")
         XCTAssertEqual(traffic, TunnelTraffic(received: 3_456_789, sent: 1_234_567))
         XCTAssertNil(VPNStatistics.traffic(netstat: output, interface: "utun9"))

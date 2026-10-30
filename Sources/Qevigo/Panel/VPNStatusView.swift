@@ -20,6 +20,8 @@ final class VPNStatusModel: ObservableObject {
     private var ticker: Task<Void, Never>?
     /// Identifies one connection, so the exit address is looked up once per tunnel.
     private var lookedUpConnection: String?
+    /// One sample at a time, so a slow one cannot pile up behind the timer.
+    private var isSampling = false
 
     func start(binding: LaunchBinding) {
         self.binding = binding
@@ -40,6 +42,9 @@ final class VPNStatusModel: ObservableObject {
         lastSample = nil
     }
 
+    /// Reads the pid file and checks the process — a couple of syscalls, cheap
+    /// enough for the main thread while the menu is tracking events. Anything
+    /// that spawns a process or reads the log happens in `sample`.
     private func refresh() {
         guard let binding else { return }
         let config = binding.payload
@@ -50,6 +55,7 @@ final class VPNStatusModel: ObservableObject {
             traffic = nil
             location = nil
             lookedUpConnection = nil
+            lastSample = nil
             downRate = 0
             upRate = 0
             return
@@ -59,28 +65,52 @@ final class VPNStatusModel: ObservableObject {
         let started = (try? FileManager.default.attributesOfItem(atPath: pidPath)[.modificationDate] as? Date) ?? nil
         duration = started.map { Date().timeIntervalSince($0) } ?? 0
 
-        if interface == nil, let log = try? String(contentsOfFile: OpenVPN.logPath(forConfig: config), encoding: .utf8) {
-            interface = VPNStatistics.tunnelInterface(log: log)
-        }
-        guard let interface else { return }
-
-        if let output = try? shell("/usr/sbin/netstat", ["-ib"]),
-           let sample = VPNStatistics.traffic(netstat: output, interface: interface) {
-            if let last = lastSample {
-                let rate = VPNStatistics.rate(from: last.traffic, to: sample, seconds: Date().timeIntervalSince(last.at))
-                downRate = rate.down
-                upRate = rate.up
-            }
-            lastSample = (sample, Date())
-            traffic = sample
-        }
-
         // One lookup per connection: it leaves the machine, so it is not repeated.
-        let connectionID = interface + (started.map { "\($0.timeIntervalSince1970)" } ?? "")
-        if lookedUpConnection != connectionID {
-            lookedUpConnection = connectionID
-            Task { await lookUpLocation() }
+        if let interface {
+            let connectionID = interface + (started.map { "\($0.timeIntervalSince1970)" } ?? "")
+            if lookedUpConnection != connectionID {
+                lookedUpConnection = connectionID
+                Task { await lookUpLocation() }
+            }
         }
+        sample(logPath: OpenVPN.logPath(forConfig: config))
+    }
+
+    /// Off the main thread: `netstat` spawns a process, and the log can be
+    /// hundreds of kilobytes. Neither belongs in the menu's event tracking.
+    private func sample(logPath: String) {
+        guard !isSampling else { return }
+        isSampling = true
+        let known = interface
+        Task.detached(priority: .utility) {
+            let found = known ?? Self.tunnelInterface(logPath: logPath)
+            let command = VPNStatistics.trafficCommand
+            let output = found.flatMap { _ in try? Self.shell(command.executable, command.arguments) }
+            let reading = found.flatMap { name in output.flatMap { VPNStatistics.traffic(netstat: $0, interface: name) } }
+            await MainActor.run { [weak self] in
+                self?.apply(interface: found, sample: reading)
+            }
+        }
+    }
+
+    private func apply(interface found: String?, sample: TunnelTraffic?) {
+        isSampling = false
+        interface = found
+        guard let sample else { return }
+        if let last = lastSample {
+            let rate = VPNStatistics.rate(from: last.traffic, to: sample, seconds: Date().timeIntervalSince(last.at))
+            downRate = rate.down
+            upRate = rate.up
+        }
+        lastSample = (sample, Date())
+        traffic = sample
+    }
+
+    /// Only the tail matters — the interface is named once, early on, and the
+    /// log keeps growing after that.
+    private nonisolated static func tunnelInterface(logPath: String) -> String? {
+        guard let log = try? String(contentsOfFile: logPath, encoding: .utf8) else { return nil }
+        return VPNStatistics.tunnelInterface(log: log)
     }
 
     private func lookUpLocation() async {
@@ -93,7 +123,7 @@ final class VPNStatusModel: ObservableObject {
         location = ExitLocation.parse(data)
     }
 
-    private func shell(_ executable: String, _ arguments: [String]) throws -> String {
+    private nonisolated static func shell(_ executable: String, _ arguments: [String]) throws -> String {
         let process = Process()
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: executable)

@@ -26,7 +26,14 @@ public enum VPNStatistics {
         return nil
     }
 
-    /// Byte counters for one interface, from `netstat -ib`.
+    /// How the byte counters are read.
+    ///
+    /// `-n` is not optional: without it netstat resolves every address it
+    /// prints through DNS, which on a machine with a tunnel up took five
+    /// seconds a call — and the menu bar samples this while it is open.
+    public static let trafficCommand = (executable: "/usr/sbin/netstat", arguments: ["-ibn"])
+
+    /// Byte counters for one interface, from `netstat -ibn`.
     ///
     /// Columns are counted from the end — Ipkts Ierrs Ibytes Opkts Oerrs
     /// Obytes Coll — because the Address column is empty for a tunnel but

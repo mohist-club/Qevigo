@@ -1,0 +1,43 @@
+name: tmp check-signing test
+# Temporary: proves check-signing.sh rejects a freshly minted identity. Deleted before merge.
+on:
+  push:
+    branches: [claude/inspiring-goodall-5d6gfm]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: xcode-27
+    env:
+      QEVIGO_SIGNING_DIR: ${{ runner.temp }}/fresh-signing
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)/Contents/Developer"
+      - name: Mint a throwaway identity
+        run: ./scripts/setup-signing.sh
+      - name: Wrong Sparkle key must be rejected
+        run: |
+          if ./scripts/check-signing.sh > out.txt 2>&1; then cat out.txt; echo "FAIL: accepted"; exit 1; fi
+          cat out.txt
+          grep -q "Info.plist expects" out.txt
+      - name: Wrong certificate must be rejected
+        run: |
+          /usr/libexec/PlistBuddy -c "Set SUPublicEDKey $(cat "$QEVIGO_SIGNING_DIR/sparkle_public_key")" Resources/Info.plist
+          if ./scripts/check-signing.sh > out.txt 2>&1; then cat out.txt; echo "FAIL: accepted"; exit 1; fi
+          cat out.txt
+          grep -q "differs from the one v" out.txt
+      - name: Matching material passes (compare release cert with itself)
+        run: |
+          # Point the check at a release signed by the throwaway cert is not possible,
+          # so confirm the extraction path yields a stable hash for the real release.
+          TMP="$(mktemp -d)"
+          gh release download "$(git tag -l 'v*' --sort=-v:refname | head -1)" --repo mohist-club/Qevigo --pattern Qevigo.zip --dir "$TMP"
+          ditto -x -k "$TMP/Qevigo.zip" "$TMP/last"
+          codesign -d --extract-certificates="$TMP/c" "$TMP/last/Qevigo.app"
+          ls -l "$TMP"/c*
+          shasum -a 256 "$TMP/c0"
+          openssl x509 -inform der -in "$TMP/c0" -noout -subject

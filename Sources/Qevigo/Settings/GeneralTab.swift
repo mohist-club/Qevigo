@@ -62,30 +62,6 @@ struct GeneralTab: View {
                     }
                 }
 
-                Divider().padding(.vertical, 6)
-
-                LabeledContent(tr("默认目标语言", "Default Target Language")) {
-                    Picker("", selection: $store.translation.primaryLanguageCode) {
-                        ForEach(Languages.all) { Text($0.localizedName).tag($0.code) }
-                    }
-                    .labelsHidden()
-                    .frame(width: SettingsMetrics.fieldWidth)
-                }
-
-                LabeledContent(tr("备用语言", "Secondary Language")) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Picker("", selection: $store.translation.secondaryLanguageCode) {
-                            ForEach(Languages.all) { Text($0.localizedName).tag($0.code) }
-                        }
-                        .labelsHidden()
-                        .frame(width: SettingsMetrics.fieldWidth)
-                        FormNote(tr(
-                            "原文已是默认目标语言时，改为翻译成备用语言。",
-                            "Used when the source text is already in the default target language."
-                        ))
-                    }
-                }
-
                 if updates.isAvailable {
                     Divider().padding(.vertical, 6)
 

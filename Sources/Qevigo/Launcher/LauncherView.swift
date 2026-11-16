@@ -206,16 +206,20 @@ private struct FolderIcon: View {
     let side: CGFloat
 
     var body: some View {
-        let inner = side * 0.78
+        // App icons leave a transparent margin around their artwork; the
+        // folder's square matches the artwork, not the full icon frame.
+        let box = side * 0.82
+        let inner = box * 0.8
         let mini = inner / 3.3
         let gap = (inner - mini * 3) / 2
         ZStack {
-            RoundedRectangle(cornerRadius: side * 0.24, style: .continuous)
+            RoundedRectangle(cornerRadius: box * 0.24, style: .continuous)
                 .fill(Color.white.opacity(0.2))
                 .overlay(
-                    RoundedRectangle(cornerRadius: side * 0.24, style: .continuous)
+                    RoundedRectangle(cornerRadius: box * 0.24, style: .continuous)
                         .stroke(Color.white.opacity(0.28), lineWidth: 0.5)
                 )
+                .frame(width: box, height: box)
             VStack(spacing: gap) {
                 ForEach(0..<3, id: \.self) { row in
                     HStack(spacing: gap) {

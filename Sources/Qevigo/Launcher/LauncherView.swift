@@ -35,6 +35,9 @@ struct LauncherView: View {
                     .frame(height: gridHeight)
                     pageDots.frame(height: dotsBlock)
                 }
+                // Pinned to the top, so the search field stays put when a
+                // search leaves a single page or nothing at all.
+                .frame(width: size.width, height: size.height, alignment: .top)
             }
             .scaleEffect(model.appeared ? 1 : 1.07)
             .opacity(model.appeared ? 1 : 0)
@@ -47,7 +50,7 @@ struct LauncherView: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.white.opacity(0.7))
-            TextField("", text: $model.query, prompt: Text(tr("搜索", "Search")).foregroundStyle(.white.opacity(0.55)))
+            TextField("", text: $model.query, prompt: Text(tr("搜索", "Search")).foregroundStyle(.white.opacity(0.6)))
                 .textFieldStyle(.plain)
                 .foregroundStyle(.white)
                 .focused($searchFocused)
@@ -82,20 +85,18 @@ struct LauncherView: View {
         .animation(.spring(response: 0.38, dampingFraction: 0.9), value: model.page)
     }
 
-    @ViewBuilder
     private var pageDots: some View {
-        if model.pageCount > 1 {
-            HStack(spacing: 10) {
-                ForEach(0..<model.pageCount, id: \.self) { index in
-                    Circle()
-                        .fill(Color.white.opacity(index == model.page ? 0.95 : 0.35))
-                        .frame(width: 8, height: 8)
-                        .padding(4)
-                        .contentShape(Rectangle())
-                        .onTapGesture { model.page = index }
-                }
+        HStack(spacing: 10) {
+            ForEach(0..<model.pageCount, id: \.self) { index in
+                Circle()
+                    .fill(Color.white.opacity(index == model.page ? 0.95 : 0.35))
+                    .frame(width: 8, height: 8)
+                    .padding(4)
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.page = index }
             }
         }
+        .opacity(model.pageCount > 1 ? 1 : 0)
     }
 }
 

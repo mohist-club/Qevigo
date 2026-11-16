@@ -87,6 +87,8 @@ struct GeneralTab: View {
                 }
 
                 if updates.isAvailable {
+                    Divider().padding(.vertical, 6)
+
                     LabeledContent(tr("软件更新", "Software Update")) {
                         VStack(alignment: .leading, spacing: 4) {
                             Toggle(tr("自动检查更新", "Check for updates automatically"), isOn: $updates.automaticallyChecks)

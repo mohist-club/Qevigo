@@ -68,13 +68,13 @@ jobs:
           # perl's alarm survives exec, so a hung launch is killed after 60s.
           perl -e 'alarm 60; exec @ARGV' "$APP" --snapshot "$OUT" || true
           perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher.png" || true
-          perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-search-jsq.png" --query jsq || true
+          perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-search.png" --query calc || true
           ls -l "$OUT"
 
       - name: TEMP print thumbnails
         continue-on-error: true
         run: |
-          for f in dist/screenshots/launcher.png dist/screenshots/launcher-search-jsq.png dist/screenshots/settings-1-shortcuts.png dist/screenshots/settings-0-general.png; do
+          for f in dist/screenshots/launcher.png dist/screenshots/launcher-search.png dist/screenshots/settings-1-shortcuts.png dist/screenshots/settings-0-general.png; do
             [ -f "$f" ] || { echo "MISSING $f"; continue; }
             sips -s format jpeg -s formatOptions 55 -Z 1100 "$f" --out "/tmp/thumb.jpg" >/dev/null
             echo "THUMB $(basename "$f") $(base64 -i /tmp/thumb.jpg | tr -d '\n')"

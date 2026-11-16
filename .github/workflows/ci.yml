@@ -1,8 +1,7 @@
 name: CI
 
 # Runs the unit tests and builds the app on a macOS runner for every push, so
-# changes can be checked without a local Mac. macos-26 because the app uses the
-# macOS 26 SDK (Liquid Glass APIs), which older runner images' Xcode lacks. Needs no secrets: the app is
+# changes can be checked without a local Mac. Needs no secrets: the app is
 # ad-hoc signed, which is fine for trying it out but not for a release (users
 # cannot auto-update to it and Accessibility will not carry over).
 on:
@@ -28,9 +27,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The app uses APIs up to the macOS 27 SDK, which the image's default
+      # Xcode may predate, so use the newest Xcode the image has.
+      - name: Select newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+
       - name: Toolchain
         run: |
           xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
           swift --version
 
       - uses: actions/cache@v4

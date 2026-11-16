@@ -13,6 +13,7 @@ PLIST=Resources/Info.plist
 [ -z "$(git status --porcelain)" ] || { echo "error: working tree is not clean" >&2; exit 1; }
 ! git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null || { echo "error: tag v$VERSION exists" >&2; exit 1; }
 [ -f "$NOTES" ] || { echo "error: notes file $NOTES not found" >&2; exit 1; }
+./scripts/check-signing.sh
 
 BUILD=$(( $(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "$PLIST") + 1 ))
 /usr/libexec/PlistBuddy -c "Set CFBundleShortVersionString $VERSION" -c "Set CFBundleVersion $BUILD" "$PLIST"

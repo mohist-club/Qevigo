@@ -171,8 +171,25 @@ App 通过 [Sparkle 2](https://sparkle-project.org) 自动升级：每天检查�
 ./scripts/release.sh 1.0.3 release-notes.md
 ```
 
-脚本会依次：提升版本号和构建号、运行测试、签名构建、打包 DMG / ZIP、
+脚本会先运行 `scripts/check-signing.sh`：Sparkle 私钥必须对应 Info.plist 里的 `SUPublicEDKey`，
+签名证书必须和上一个 `v*` 版本相同，否则直接中止（换电脑后误跑 `setup-signing.sh` 生成新证书时，就会在这里被拦下）。
+然后依次：提升版本号和构建号、运行测试、签名构建、打包 DMG / ZIP、
 生成签名过的 `appcast.xml`、提交并打标签、推送、创建 GitHub Release（附 DMG、ZIP、appcast.xml）。
+
+### 在 GitHub 上发版
+
+不想在本机发版时，可以用 [.github/workflows/release.yml](.github/workflows/release.yml)：
+Actions → Release → Run workflow，填版本号和更新说明。它在 macOS 机器上跑同一个 `release.sh`，只能从 `main` 运行。
+
+需要先在仓库里添加三个 Secret，内容来自发版那台电脑的 `~/.qevigo-signing/`（在有 `gh` 的电脑上执行）：
+
+```bash
+base64 -i ~/.qevigo-signing/signing.p12 | gh secret set QEVIGO_SIGNING_P12 --repo mohist-club/Qevigo
+gh secret set QEVIGO_KEYCHAIN_PASSWORD --repo mohist-club/Qevigo < ~/.qevigo-signing/keychain-password
+gh secret set QEVIGO_SPARKLE_PRIVATE_KEY --repo mohist-club/Qevigo < ~/.qevigo-signing/sparkle_private_key
+```
+
+也可以在网页上 Settings → Secrets and variables → Actions 里手动添加。`signing.p12` 要填 base64 后的内容。
 App 的更新源是 `releases/latest/download/appcast.xml`，因此始终指向最新的 Release。
 
 ### 测试自动升级

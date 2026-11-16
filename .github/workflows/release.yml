@@ -1,0 +1,94 @@
+name: Release
+
+# Cuts a release from main with scripts/release.sh: bump the version, test,
+# build and sign, package DMG/ZIP, write the appcast, tag, push and publish.
+# Run it by hand from the Actions tab.
+#
+# Needs three repository secrets, copied from ~/.qevigo-signing on the machine
+# that made the earlier releases (never from a fresh setup-signing.sh, which
+# would make a new identity that installed copies reject):
+#   QEVIGO_SIGNING_P12         base64 of signing.p12
+#   QEVIGO_KEYCHAIN_PASSWORD   contents of keychain-password
+#   QEVIGO_SPARKLE_PRIVATE_KEY contents of sparkle_private_key
+# scripts/check-signing.sh stops the release if either key does not match.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version, e.g. 1.6.9
+        required: true
+      notes:
+        description: Release notes (Markdown)
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    # Same image as CI: the app needs the macOS 27 SDK.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # runner.temp is not available to job-level env, so set it here.
+      - name: Signing folder
+        run: echo "QEVIGO_SIGNING_DIR=$RUNNER_TEMP/qevigo-signing" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check inputs
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "error: version must look like 1.6.9" >&2; exit 1; }
+
+      - name: Select newest Xcode
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
+
+      - name: Restore signing material
+        env:
+          P12: ${{ secrets.QEVIGO_SIGNING_P12 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.QEVIGO_KEYCHAIN_PASSWORD }}
+          SPARKLE_KEY: ${{ secrets.QEVIGO_SPARKLE_PRIVATE_KEY }}
+        run: |
+          # An empty secret must stop here: setup-signing.sh would otherwise
+          # treat the missing file as a first run and mint a new identity.
+          for name in P12 KEYCHAIN_PASSWORD SPARKLE_KEY; do
+            [ -n "${!name}" ] || { echo "error: secret for $name is not set" >&2; exit 1; }
+          done
+          umask 077
+          mkdir -p "$QEVIGO_SIGNING_DIR"
+          printf '%s' "$P12" | base64 -D > "$QEVIGO_SIGNING_DIR/signing.p12"
+          printf '%s\n' "$KEYCHAIN_PASSWORD" > "$QEVIGO_SIGNING_DIR/keychain-password"
+          printf '%s\n' "$SPARKLE_KEY" > "$QEVIGO_SIGNING_DIR/sparkle_private_key"
+          /usr/libexec/PlistBuddy -c "Print SUPublicEDKey" Resources/Info.plist > "$QEVIGO_SIGNING_DIR/sparkle_public_key"
+          ./scripts/setup-signing.sh
+
+      - name: Release
+        env:
+          VERSION: ${{ inputs.version }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '%s\n' "$NOTES" > "$RUNNER_TEMP/release-notes.md"
+          ./scripts/release.sh "$VERSION" "$RUNNER_TEMP/release-notes.md"
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$QEVIGO_SIGNING_DIR/signing.keychain-db" 2>/dev/null || true
+          rm -rf "$QEVIGO_SIGNING_DIR"

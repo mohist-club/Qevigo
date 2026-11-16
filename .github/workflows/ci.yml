@@ -1,7 +1,8 @@
 name: CI
 
 # Runs the unit tests and builds the app on a macOS runner for every push, so
-# changes can be checked without a local Mac. Needs no secrets: the app is
+# changes can be checked without a local Mac. macos-26 because the app uses the
+# macOS 26 SDK (Liquid Glass APIs), which older runner images' Xcode lacks. Needs no secrets: the app is
 # ad-hoc signed, which is fine for trying it out but not for a release (users
 # cannot auto-update to it and Accessibility will not carry over).
 on:
@@ -22,7 +23,7 @@ jobs:
   test-and-build:
     # Pushes to this repo already run; only run pull_request for forks.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

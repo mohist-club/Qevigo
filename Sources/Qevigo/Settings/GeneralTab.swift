@@ -1,5 +1,4 @@
 import AppKit
-import KeyboardShortcuts
 import QevigoCore
 import SwiftUI
 
@@ -17,13 +16,6 @@ struct GeneralTab: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle(tr("开启", "On"), isOn: launchBinding)
                         if let launchError { Text(launchError).font(.caption).foregroundStyle(.red) }
-                    }
-                }
-
-                LabeledContent(tr("划词翻译快捷键", "Translate Shortcut")) {
-                    HStack(spacing: 12) {
-                        ShortcutField(name: .translateSelection, width: 200)
-                        Toggle(tr("启用", "Enabled"), isOn: $store.preferences.translateShortcutEnabled)
                     }
                 }
 
@@ -71,14 +63,6 @@ struct GeneralTab: View {
                 }
 
                 Divider().padding(.vertical, 6)
-
-                LabeledContent(tr("默认翻译服务", "Default Service")) {
-                    Picker("", selection: $store.translation.defaultProvider) {
-                        ForEach(providerChoices) { Text($0.displayName).tag($0) }
-                    }
-                    .labelsHidden()
-                    .frame(width: SettingsMetrics.fieldWidth)
-                }
 
                 LabeledContent(tr("默认目标语言", "Default Target Language")) {
                     Picker("", selection: $store.translation.primaryLanguageCode) {
@@ -134,14 +118,6 @@ struct GeneralTab: View {
             accessibilityGranted = PermissionService.isAccessibilityTrusted
             launchAtLogin = LaunchAtLogin.isEnabled
         }
-    }
-
-    /// The default service can only be one that is usable, but keep the saved
-    /// value visible so the picker never shows an empty selection.
-    private var providerChoices: [ProviderID] {
-        var choices = store.availableProviders
-        if !choices.contains(store.translation.defaultProvider) { choices.insert(store.translation.defaultProvider, at: 0) }
-        return choices
     }
 
     private var launchBinding: Binding<Bool> {

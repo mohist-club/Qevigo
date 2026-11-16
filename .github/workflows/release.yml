@@ -35,9 +35,12 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 45
     env:
-      QEVIGO_SIGNING_DIR: ${{ runner.temp }}/qevigo-signing
       GH_TOKEN: ${{ github.token }}
     steps:
+      # runner.temp is not available to job-level env, so set it here.
+      - name: Signing folder
+        run: echo "QEVIGO_SIGNING_DIR=$RUNNER_TEMP/qevigo-signing" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

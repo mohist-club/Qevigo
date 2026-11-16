@@ -12,6 +12,11 @@ MINIMUM="$(/usr/libexec/PlistBuddy -c "Print LSMinimumSystemVersion" "$PLIST")"
 BASE_URL="${1:-https://github.com/mohist-club/Qevigo/releases/download/v$VERSION}"
 KEY="${QEVIGO_SIGNING_DIR:-$HOME/.qevigo-signing}/sparkle_private_key"
 SIGN_UPDATE=".build/artifacts/sparkle/Sparkle/bin/sign_update"
+# Builds below this were signed with a certificate and Sparkle key that were
+# lost. They cannot verify anything newer, so the item is an informational
+# update for them: Sparkle shows that a new version exists and opens the
+# release page instead of downloading. Builds from here on update normally.
+FIRST_BUILD_WITH_CURRENT_KEY=29
 
 [ -f dist/Qevigo.zip ] || { echo "error: dist/Qevigo.zip missing; run scripts/make-dmg.sh" >&2; exit 1; }
 [ -x "$SIGN_UPDATE" ] || swift package resolve
@@ -29,7 +34,11 @@ cat > dist/appcast.xml <<XML
       <sparkle:version>$BUILD</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$MINIMUM</sparkle:minimumSystemVersion>
+      <link>https://github.com/mohist-club/Qevigo/releases/tag/v$VERSION</link>
       <sparkle:releaseNotesLink>https://github.com/mohist-club/Qevigo/releases/tag/v$VERSION</sparkle:releaseNotesLink>
+      <sparkle:informationalUpdate>
+        <sparkle:belowVersion>$FIRST_BUILD_WITH_CURRENT_KEY</sparkle:belowVersion>
+      </sparkle:informationalUpdate>
       <enclosure url="$BASE_URL/Qevigo.zip" type="application/octet-stream" $ATTRIBUTES/>
     </item>
   </channel>

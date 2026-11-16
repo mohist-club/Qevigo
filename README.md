@@ -162,8 +162,22 @@ App 通过 [Sparkle 2](https://sparkle-project.org) 自动升级：每天检查�
 | `sparkle_private_key` | Sparkle EdDSA 私钥，用来给更新包签名 |
 | `sparkle_public_key` | 对应公钥，已写进 Info.plist |
 
+**这些文件不在 GitHub 上，也不应该放进仓库。** GitHub Secrets 只能写不能读，也不算备份。
+请把整个文件夹另存一份，例如放进密码管理器或加密磁盘映像。
 丢失证书或 Sparkle 私钥后，已安装的用户就收不到自动升级了，只能手动重装并重新授权辅助功能。
 换一台 Mac 发版时，把整个文件夹复制过去即可。
+
+### 签名材料丢失后更换身份
+
+1.7.0 就是这样换的。只有在旧材料确实找不回来时才这样做：
+
+1. 在一台 Mac 上运行 `scripts/setup-signing.sh`，生成新的证书和 Sparkle 密钥，并**立刻备份** `~/.qevigo-signing/`。
+2. 把新的 `sparkle_public_key` 写进 `Resources/Info.plist` 的 `SUPublicEDKey`，同时更新 GitHub 上的三个 Secret。
+3. 把 `scripts/make-appcast.sh` 里的 `FIRST_BUILD_WITH_CURRENT_KEY` 改成这次发版的构建号。
+4. 发版时勾选 `new_identity`（本机发版则设置 `QEVIGO_NEW_IDENTITY=1`）。`check-signing.sh` 只在 Info.plist 的公钥确实已更换时才接受这个选项。
+
+旧版本检查更新时会收到一条「信息型更新」：Sparkle 提示有新版本并打开下载页，不会尝试安装。
+从新版本开始，自动升级恢复正常。
 
 ### 发版
 

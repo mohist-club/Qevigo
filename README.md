@@ -56,7 +56,8 @@ App 使用自签名证书，没有经过 Apple 公证，首次打开会被系统
 
 ## 构建与运行
 
-需要 macOS 14+ 和 Xcode（Swift 5.10+）。
+构建需要带 **macOS 27 SDK** 的完整 Xcode（Xcode 27 或更新，只装命令行工具不够）：浮窗和快捷键提示层用到了 macOS 26 / 27 才有的 Liquid Glass 接口。
+构建出的 App 仍支持 macOS 14+，新接口都有 `#available` 判断。CI（[.github/workflows/ci.yml](.github/workflows/ci.yml)）每次推送都会在 macOS 上跑测试并构建，构建产物可在 Actions 页面下载。
 
 ```bash
 swift test                          # 单元测试（39 个）

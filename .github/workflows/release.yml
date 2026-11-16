@@ -20,6 +20,10 @@ on:
       notes:
         description: Release notes (Markdown)
         required: true
+      new_identity:
+        description: Only for the release that moves to a new certificate and Sparkle key (old ones lost)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -81,6 +85,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           NOTES: ${{ inputs.notes }}
+          QEVIGO_NEW_IDENTITY: ${{ inputs.new_identity && '1' || '0' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

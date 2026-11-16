@@ -69,6 +69,8 @@ jobs:
           perl -e 'alarm 60; exec @ARGV' "$APP" --snapshot "$OUT" || true
           perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher.png" || true
           perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-search.png" --query calc || true
+          perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-folder.png" --demo-folder || true
+          perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-folder-open.png" --demo-folder --open-folder || true
           ls -l "$OUT"
 
       - uses: actions/upload-artifact@v4

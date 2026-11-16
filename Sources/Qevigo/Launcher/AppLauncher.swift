@@ -11,6 +11,9 @@ final class AppLauncher: NSObject, NSWindowDelegate {
     static let shared = AppLauncher()
 
     let model = LauncherModel()
+    /// Order and folders, kept in the data folder beside the settings.
+    private let layoutStore = JSONFileStore()
+    private static let layoutFile = "launcher_layout.json"
     private var panel: LauncherPanel?
     private var monitor: Any?
     private var isHiding = false
@@ -29,6 +32,8 @@ final class AppLauncher: NSObject, NSWindowDelegate {
         super.init()
         model.onLaunch = { [weak self] in self?.launch($0) }
         model.onDismiss = { [weak self] in self?.hide() }
+        model.setLayout(layoutStore.load(LauncherLayout.self, from: Self.layoutFile) ?? LauncherLayout())
+        model.onLayoutChange = { [layoutStore] layout in layoutStore.save(layout, to: AppLauncher.layoutFile) }
     }
 
     func toggle() {
@@ -171,12 +176,20 @@ final class AppLauncher: NSObject, NSWindowDelegate {
     /// True when the event was used here and should go no further.
     private func handle(_ event: NSEvent) -> Bool {
         if event.type == .scrollWheel {
-            handleScroll(event)
+            // Pages stay put while a folder is open over them.
+            if model.openFolderID == nil { handleScroll(event) }
             return true
         }
         // While an input method is composing (pinyin, for one), Return, Esc
         // and the arrows pick and dismiss candidates; leave them to it.
         if let editor = panel?.firstResponder as? NSTextView, editor.hasMarkedText() { return false }
+        // With a folder open, keys belong to its name field; Esc closes it.
+        if model.openFolderID != nil {
+            guard event.keyCode == 53 else { return false }
+            panel?.makeFirstResponder(nil)
+            model.closeFolder()
+            return true
+        }
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) { return false }
 
         switch event.keyCode {
@@ -229,89 +242,3 @@ final class LauncherPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-@MainActor
-final class LauncherModel: ObservableObject {
-    @Published private(set) var results: [AppEntry] = []
-    @Published var query = "" {
-        didSet { if query != oldValue { refilter() } }
-    }
-    @Published var page = 0
-    /// Index into `results`. Nothing is highlighted until you type or use the arrows.
-    @Published var selection: Int?
-    @Published var appeared = false
-    /// Bumped to put the cursor back in the search field.
-    @Published var focusRequest = 0
-    @Published private(set) var grid = AppGrid.Size(columns: 7, rows: 5)
-
-    var onLaunch: (AppEntry) -> Void = { _ in }
-    var onDismiss: () -> Void = {}
-
-    private var apps: [AppEntry] = []
-    private var icons: [String: NSImage] = [:]
-
-    var pages: [[AppEntry]] { AppGrid.pages(results, perPage: grid.perPage) }
-    var pageCount: Int { max(1, Int((Double(results.count) / Double(grid.perPage)).rounded(.up))) }
-    var isSearching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
-
-    func reset(grid: AppGrid.Size) {
-        self.grid = grid
-        page = 0
-        query = ""
-        refilter()
-    }
-
-    func setApps(_ apps: [AppEntry]) {
-        guard apps != self.apps else { return }
-        self.apps = apps
-        refilter()
-    }
-
-    func icon(for entry: AppEntry) -> NSImage {
-        if let icon = icons[entry.path] { return icon }
-        let icon = NSWorkspace.shared.icon(forFile: entry.path)
-        icon.size = NSSize(width: 256, height: 256)
-        icons[entry.path] = icon
-        return icon
-    }
-
-    func launch(_ entry: AppEntry) { onLaunch(entry) }
-
-    func move(columns: Int, rows: Int) {
-        guard !results.isEmpty else { return }
-        guard let current = selection else {
-            // The first arrow press highlights the first app on this page.
-            select(min(page * grid.perPage, results.count - 1))
-            return
-        }
-        select(min(max(current + columns + rows * grid.columns, 0), results.count - 1))
-    }
-
-    func turnPage(_ delta: Int) {
-        let target = min(max(page + delta, 0), pageCount - 1)
-        guard target != page else { return }
-        page = target
-        if selection != nil { selection = min(page * grid.perPage, results.count - 1) }
-    }
-
-    func activateSelection() {
-        guard let index = selection ?? (isSearching && !results.isEmpty ? 0 : nil), results.indices.contains(index) else { return }
-        launch(results[index])
-    }
-
-    private func select(_ index: Int) {
-        selection = index
-        page = index / grid.perPage
-    }
-
-    private func refilter() {
-        results = AppGrid.search(apps, query: query)
-        if isSearching {
-            // Return opens the best match, and results start on the first page.
-            selection = results.isEmpty ? nil : 0
-            page = 0
-        } else {
-            selection = nil
-        }
-        page = min(page, pageCount - 1)
-    }
-}

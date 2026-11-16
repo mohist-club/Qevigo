@@ -22,7 +22,9 @@ jobs:
   test-and-build:
     # Pushes to this repo already run; only run pull_request for forks.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: macos-26
+    # The app needs the macOS 27 SDK, which only this image's Xcode 27 has.
+    # It is a public preview; switch to the macos-27 label once GitHub ships it.
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

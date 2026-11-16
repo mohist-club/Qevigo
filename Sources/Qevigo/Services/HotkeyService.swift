@@ -5,6 +5,8 @@ import QevigoCore
 extension KeyboardShortcuts.Name {
     /// Control-Option-T by default; Command-G would shadow "Find Next" in every app.
     static let translateSelection = Self("translateSelection", default: .init(.t, modifiers: [.control, .option]))
+    /// No default: every obvious combination already means something somewhere.
+    static let showAllApplications = Self("showAllApplications")
 }
 
 extension Notification.Name {
@@ -16,10 +18,16 @@ extension Notification.Name {
 @MainActor
 final class HotkeyService {
     /// Re-registers every global hotkey from scratch.
-    func sync(translateEnabled: Bool, bindings: [LaunchBinding], onTranslate: @escaping () -> Void) {
+    func sync(
+        translateEnabled: Bool, launcherEnabled: Bool, bindings: [LaunchBinding],
+        onTranslate: @escaping () -> Void, onLauncher: @escaping () -> Void
+    ) {
         KeyboardShortcuts.removeAllHandlers()
         if translateEnabled {
             KeyboardShortcuts.onKeyUp(for: .translateSelection, action: onTranslate)
+        }
+        if launcherEnabled {
+            KeyboardShortcuts.onKeyUp(for: .showAllApplications, action: onLauncher)
         }
         for binding in bindings where binding.isEnabled {
             KeyboardShortcuts.onKeyUp(for: KeyboardShortcuts.Name(binding.hotkeyName)) { ActionLauncher.execute(binding) }

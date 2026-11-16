@@ -19,6 +19,7 @@ macOS 菜单栏划词翻译：选中文字，按一下全局快捷键，弹出�
 - **智能方向**：自动识别原文语言（NaturalLanguage，50+ 种），翻成「默认目标语言」，原文已是该语言则翻成「备用语言」
 - **读取可用模型**、**验证并测速**（首字耗时 / 总耗时 / 字符每秒）
 - **全局快捷键**：绑定应用、快捷指令、系统操作（锁屏、睡眠等，危险操作二次确认）、Shell / AppleScript / JXA 脚本
+- **所有应用（启动台）**：macOS 26 起系统去掉了全屏的「启动台」。在 设置 → 快捷键 里给「所有应用」录一个快捷键，按下就会全屏显示所有应用：7×5 分页，触控板左右滑动或方向键翻页，直接打字搜索（支持中文名、英文名、拼音和拼音首字母，如 `jsq` 找到「计算器」），回车或点击打开，Esc 或点空白处关闭
 - **快捷键提示层**：按下快捷键切换应用、VPN、脚本时，屏幕上会出现一个与系统音量提示同款的半透明提示，告诉你发生了什么（划词翻译不显示，因为翻译窗口本身就是反馈）
 - **VPN 状态面板**：菜单栏下拉里显示连接时长、出口 IP 与归属地、实时上下行速度和累计流量，并可直接连接 / 断开。出口 IP 通过 ipinfo.io 查询，**仅在已连接时查询一次**（此时查询走的是 VPN 出口，不会暴露你本机的 IP）
 - **SSH 服务器**：从 `~/.ssh/config` 读取主机列表，一个快捷键连上；可选用系统终端或 VS Code Remote-SSH 打开，并能一键运行 `ssh-copy-id` 配置免密登录（密码只在终端里输一次，Qevigo 不保存）
@@ -60,7 +61,7 @@ App 使用自签名证书，没有经过 Apple 公证，首次打开会被系统
 构建出的 App 仍支持 macOS 14+，新接口都有 `#available` 判断。CI（[.github/workflows/ci.yml](.github/workflows/ci.yml)）每次推送都会在 macOS 上跑测试并构建，构建产物可在 Actions 页面下载。
 
 ```bash
-swift test                          # 单元测试（39 个）
+swift test                          # 单元测试
 ./scripts/setup-signing.sh          # 只需一次：生成签名证书与 Sparkle 密钥（见「签名与自动升级」）
 ./scripts/build-app.sh              # 生成 dist/Qevigo.app（release，用上面的证书签名）
 CONFIG=debug ./scripts/build-app.sh # 调试构建，更快
@@ -127,6 +128,8 @@ API Key 用 AES-GCM 加密后保存（密钥由本机硬件 UUID 派生），文
 ```bash
 # 把每个设置标签页渲染成 PNG（进程内渲染，不需要屏幕录制权限）
 dist/Qevigo.app/Contents/MacOS/Qevigo --snapshot /tmp/shots [--english] [--dark]
+# 打开全屏应用网格并截图（可带搜索词）
+dist/Qevigo.app/Contents/MacOS/Qevigo --demo-launcher /tmp/launcher.png [--query jsq]
 # 用固定文本打开翻译浮窗并截图
 QEVIGO_DATA_DIR=/tmp/data dist/Qevigo.app/Contents/MacOS/Qevigo --demo-panel "Hello" /tmp/panel.png
 ```

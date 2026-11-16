@@ -107,6 +107,7 @@ final class SettingsStore: ObservableObject {
         }
         if var imported = snapshot.preferences {
             imported.translateShortcutEnabled = preferences.translateShortcutEnabled
+            imported.appLauncherShortcutEnabled = preferences.appLauncherShortcutEnabled
             preferences = imported
         }
         for (id, key) in snapshot.apiKeys {

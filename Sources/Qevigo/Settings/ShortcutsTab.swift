@@ -5,6 +5,7 @@ import SwiftUI
 
 private enum ShortcutRowID: Hashable {
     case translate
+    case launcher
     case binding(UUID)
 }
 
@@ -36,6 +37,15 @@ struct ShortcutsTab: View {
                         isEnabled: $store.preferences.translateShortcutEnabled
                     )
                     .tag(ShortcutRowID.translate)
+
+                    row(
+                        icon: AnyView(Image(systemName: "square.grid.3x3.fill").resizable().scaledToFit().foregroundStyle(.secondary)),
+                        title: tr("所有应用", "All Apps"),
+                        subtitle: tr("内置 · 全屏显示所有应用，可搜索", "Built-in · Full-screen grid of every app, searchable"),
+                        name: .showAllApplications,
+                        isEnabled: $store.preferences.appLauncherShortcutEnabled
+                    )
+                    .tag(ShortcutRowID.launcher)
 
                     ForEach($store.bindings) { $binding in
                         row(
@@ -71,7 +81,7 @@ struct ShortcutsTab: View {
                         .help(tr("删除所选快捷键", "Delete Selected Shortcut"))
 
                     Spacer()
-                    Text(tr("共 \(store.bindings.count + 1) 个", "\(store.bindings.count + 1) total"))
+                    Text(tr("共 \(store.bindings.count + 2) 个", "\(store.bindings.count + 2) total"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

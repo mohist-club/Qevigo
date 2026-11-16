@@ -31,6 +31,22 @@ enum SnapshotTool {
         NSApp.terminate(nil)
     }
 
+    /// `Qevigo --demo-launcher <png> [--query <text>]`: opens the full-screen
+    /// app grid, renders it after it settles and quits.
+    static func launcher(to url: URL, query: String?) async {
+        let launcher = AppLauncher.shared
+        launcher.staysOpenWhenInactive = true
+        launcher.show()
+        if let query { launcher.model.query = query }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        if let view = launcher.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        }
+        NSApp.terminate(nil)
+    }
+
     /// Renders the translation panel after `delay` seconds and quits.
     static func panel(_ panel: FloatingTranslationPanel, to url: URL, delay: Double) async {
         try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))

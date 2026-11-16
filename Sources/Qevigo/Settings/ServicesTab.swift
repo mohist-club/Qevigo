@@ -16,6 +16,8 @@ struct ServicesTab: View {
     var body: some View {
         SettingsPage {
             VStack(alignment: .leading, spacing: 14) {
+                languages
+                Divider()
                 failoverHeader
 
                 HStack(alignment: .top, spacing: 16) {
@@ -35,6 +37,32 @@ struct ServicesTab: View {
         .onChange(of: selected) { _, _ in
             loadDraft()
             message = nil
+        }
+    }
+
+    // MARK: Languages
+
+    private var languages: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 20) {
+                languagePicker(tr("默认目标语言", "Target Language"), selection: $store.translation.primaryLanguageCode)
+                languagePicker(tr("备用语言", "Secondary Language"), selection: $store.translation.secondaryLanguageCode)
+            }
+            FormNote(tr(
+                "译文默认翻成目标语言；原文已是目标语言时，改为翻译成备用语言。",
+                "Text is translated into the target language, or into the secondary language when it is already in the target language."
+            ))
+        }
+    }
+
+    private func languagePicker(_ title: String, selection: Binding<String>) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+            Picker("", selection: selection) {
+                ForEach(Languages.all) { Text($0.localizedName).tag($0.code) }
+            }
+            .labelsHidden()
+            .frame(width: 170)
         }
     }
 

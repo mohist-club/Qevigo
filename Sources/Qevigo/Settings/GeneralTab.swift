@@ -1,5 +1,4 @@
 import AppKit
-import KeyboardShortcuts
 import QevigoCore
 import SwiftUI
 
@@ -17,13 +16,6 @@ struct GeneralTab: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle(tr("开启", "On"), isOn: launchBinding)
                         if let launchError { Text(launchError).font(.caption).foregroundStyle(.red) }
-                    }
-                }
-
-                LabeledContent(tr("划词翻译快捷键", "Translate Shortcut")) {
-                    HStack(spacing: 12) {
-                        ShortcutField(name: .translateSelection, width: 200)
-                        Toggle(tr("启用", "Enabled"), isOn: $store.preferences.translateShortcutEnabled)
                     }
                 }
 
@@ -70,39 +62,9 @@ struct GeneralTab: View {
                     }
                 }
 
-                Divider().padding(.vertical, 6)
-
-                LabeledContent(tr("默认翻译服务", "Default Service")) {
-                    Picker("", selection: $store.translation.defaultProvider) {
-                        ForEach(providerChoices) { Text($0.displayName).tag($0) }
-                    }
-                    .labelsHidden()
-                    .frame(width: SettingsMetrics.fieldWidth)
-                }
-
-                LabeledContent(tr("默认目标语言", "Default Target Language")) {
-                    Picker("", selection: $store.translation.primaryLanguageCode) {
-                        ForEach(Languages.all) { Text($0.localizedName).tag($0.code) }
-                    }
-                    .labelsHidden()
-                    .frame(width: SettingsMetrics.fieldWidth)
-                }
-
-                LabeledContent(tr("备用语言", "Secondary Language")) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Picker("", selection: $store.translation.secondaryLanguageCode) {
-                            ForEach(Languages.all) { Text($0.localizedName).tag($0.code) }
-                        }
-                        .labelsHidden()
-                        .frame(width: SettingsMetrics.fieldWidth)
-                        FormNote(tr(
-                            "原文已是默认目标语言时，改为翻译成备用语言。",
-                            "Used when the source text is already in the default target language."
-                        ))
-                    }
-                }
-
                 if updates.isAvailable {
+                    Divider().padding(.vertical, 6)
+
                     LabeledContent(tr("软件更新", "Software Update")) {
                         VStack(alignment: .leading, spacing: 4) {
                             Toggle(tr("自动检查更新", "Check for updates automatically"), isOn: $updates.automaticallyChecks)
@@ -134,14 +96,6 @@ struct GeneralTab: View {
             accessibilityGranted = PermissionService.isAccessibilityTrusted
             launchAtLogin = LaunchAtLogin.isEnabled
         }
-    }
-
-    /// The default service can only be one that is usable, but keep the saved
-    /// value visible so the picker never shows an empty selection.
-    private var providerChoices: [ProviderID] {
-        var choices = store.availableProviders
-        if !choices.contains(store.translation.defaultProvider) { choices.insert(store.translation.defaultProvider, at: 0) }
-        return choices
     }
 
     private var launchBinding: Binding<Bool> {

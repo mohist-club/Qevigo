@@ -21,6 +21,9 @@ public struct AppPreferences: Codable, Equatable, Sendable {
     /// 0 is more solid, 1 is more transparent.
     public var glassTransparency = 0.56
     public var translateShortcutEnabled = true
+    /// The full-screen app grid. It has no default key, so being on does
+    /// nothing until a shortcut is recorded.
+    public var appLauncherShortcutEnabled = true
     /// Empty means: look in the usual places.
     public var openvpnPath = ""
 
@@ -34,6 +37,7 @@ public struct AppPreferences: Codable, Equatable, Sendable {
         let transparency = try c.decodeIfPresent(Double.self, forKey: .glassTransparency) ?? 0.56
         glassTransparency = min(max(transparency, 0.15), 0.85)
         translateShortcutEnabled = try c.decodeIfPresent(Bool.self, forKey: .translateShortcutEnabled) ?? true
+        appLauncherShortcutEnabled = try c.decodeIfPresent(Bool.self, forKey: .appLauncherShortcutEnabled) ?? true
         openvpnPath = try c.decodeIfPresent(String.self, forKey: .openvpnPath) ?? ""
     }
 }

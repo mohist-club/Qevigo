@@ -55,6 +55,29 @@ jobs:
       - name: Build app (release, ad-hoc signed)
         run: ./scripts/build-app.sh
 
+      # Renders the settings tabs and the full-screen app grid to PNGs so UI
+      # changes can be looked at without a Mac. Never fails the build.
+      - name: Screenshots
+        continue-on-error: true
+        env:
+          QEVIGO_DATA_DIR: ${{ runner.temp }}/qevigo-data
+        run: |
+          APP=dist/Qevigo.app/Contents/MacOS/Qevigo
+          OUT=dist/screenshots
+          mkdir -p "$OUT"
+          # perl's alarm survives exec, so a hung launch is killed after 60s.
+          perl -e 'alarm 60; exec @ARGV' "$APP" --snapshot "$OUT" || true
+          perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher.png" || true
+          perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-search.png" --query calc || true
+          ls -l "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.sha }}
+          path: dist/screenshots
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Package app
         run: ditto -c -k --sequesterRsrc --keepParent dist/Qevigo.app dist/Qevigo-ci.zip
 

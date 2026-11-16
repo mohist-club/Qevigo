@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.rebuildMenus()
         }
         env.settings.$preferences
-            .map { ($0.interfaceLanguage, $0.translateShortcutEnabled) }
+            .map { ($0.interfaceLanguage, $0.translateShortcutEnabled, $0.appLauncherShortcutEnabled) }
             .removeDuplicates { $0 == $1 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -48,6 +48,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settingsController = controller
             let directory = URL(fileURLWithPath: arguments[index + 1])
             Task { await SnapshotTool.run(directory: directory, controller: controller) }
+            return
+        }
+        if let index = arguments.firstIndex(of: "--demo-launcher"), arguments.indices.contains(index + 1) {
+            if arguments.contains("--english") { env.settings.preferences.interfaceLanguage = .english }
+            let output = URL(fileURLWithPath: arguments[index + 1])
+            let query = arguments.firstIndex(of: "--query").flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+            Task { await SnapshotTool.launcher(to: output, query: query) }
             return
         }
         if let index = arguments.firstIndex(of: "--demo-panel"), arguments.indices.contains(index + 2) {
@@ -84,8 +91,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func syncHotkeys() {
         hotkeys.sync(
             translateEnabled: env.settings.preferences.translateShortcutEnabled,
-            bindings: env.settings.bindings
-        ) { [weak self] in self?.coordinator.trigger() }
+            launcherEnabled: env.settings.preferences.appLauncherShortcutEnabled,
+            bindings: env.settings.bindings,
+            onTranslate: { [weak self] in self?.coordinator.trigger() },
+            onLauncher: { AppLauncher.shared.toggle() }
+        )
     }
 
     // MARK: Menus

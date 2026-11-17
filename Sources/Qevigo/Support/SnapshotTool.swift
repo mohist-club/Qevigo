@@ -41,6 +41,9 @@ enum SnapshotTool {
         if CommandLine.arguments.contains("--demo-folder") {
             launcher.model.makeDemoFolder(open: CommandLine.arguments.contains("--open-folder"))
         }
+        if CommandLine.arguments.contains("--demo-edit") {
+            launcher.model.demoEditing(askToRemove: CommandLine.arguments.contains("--ask-remove"))
+        }
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         if let view = launcher.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
             view.cacheDisplay(in: view.bounds, to: rep)

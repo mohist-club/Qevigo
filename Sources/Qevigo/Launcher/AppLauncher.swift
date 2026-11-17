@@ -34,6 +34,8 @@ final class AppLauncher: NSObject, NSWindowDelegate {
         model.onDismiss = { [weak self] in self?.hide() }
         model.setLayout(layoutStore.load(LauncherLayout.self, from: Self.layoutFile) ?? LauncherLayout())
         model.onLayoutChange = { [layoutStore] layout in layoutStore.save(layout, to: AppLauncher.layoutFile) }
+        model.onRemove = { [weak self] app in self?.remove(app) }
+        model.isRunning = { !AppLauncher.runningInstances(of: $0).isEmpty }
     }
 
     func toggle() {
@@ -116,6 +118,79 @@ final class AppLauncher: NSObject, NSWindowDelegate {
         }
     }
 
+    // MARK: Removing apps
+
+    nonisolated static func runningInstances(of app: AppEntry) -> [NSRunningApplication] {
+        let url = URL(fileURLWithPath: app.path).resolvingSymlinksInPath().standardizedFileURL
+        let bundleID = Bundle(path: app.path)?.bundleIdentifier
+        return NSWorkspace.shared.runningApplications.filter { running in
+            if let bundleID, running.bundleIdentifier == bundleID { return true }
+            return running.bundleURL?.resolvingSymlinksInPath().standardizedFileURL == url
+        }
+    }
+
+    /// Quits the app if it is running, then moves it to the Trash. Apps the
+    /// user may not write to (App Store installs, owned by root) go through
+    /// Finder, which asks for an administrator password itself; the grid
+    /// steps aside first so that prompt is not hidden behind it.
+    private func remove(_ app: AppEntry) {
+        Task { @MainActor in
+            let running = Self.runningInstances(of: app)
+            if !running.isEmpty {
+                running.forEach { $0.terminate() }
+                for _ in 0..<60 where running.contains(where: { !$0.isTerminated }) {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                guard running.allSatisfy(\.isTerminated) else {
+                    report(tr("「\(app.name)」没有退出，没有移到废纸篓。", "“\(app.name)” did not quit, so it was not moved to the Trash."))
+                    return
+                }
+            }
+            do {
+                try FileManager.default.trashItem(at: URL(fileURLWithPath: app.path), resultingItemURL: nil)
+                model.didRemove(path: app.path)
+            } catch let error where Self.isPermissionError(error) {
+                hide()
+                do {
+                    // The path is passed as an argument, never spliced into the script.
+                    _ = try await ActionLauncher.runSpec(ShortcutExecutionSpec(executable: "/usr/bin/osascript", arguments: [
+                        "-e", "on run argv",
+                        "-e", "tell application \"Finder\" to delete (POSIX file (item 1 of argv) as alias)",
+                        "-e", "end run",
+                        app.path,
+                    ]))
+                    model.didRemove(path: app.path)
+                    ShortcutHUD.shared.show(symbol: "trash", title: app.name, subtitle: tr("已移到废纸篓", "Moved to Trash"),
+                                            image: NSWorkspace.shared.icon(forFile: app.path))
+                } catch {
+                    report(tr("无法将「\(app.name)」移到废纸篓：\(error.localizedDescription)",
+                              "Could not move “\(app.name)” to the Trash: \(error.localizedDescription)"))
+                }
+            } catch {
+                report(tr("无法将「\(app.name)」移到废纸篓：\(error.localizedDescription)",
+                          "Could not move “\(app.name)” to the Trash: \(error.localizedDescription)"))
+            }
+        }
+    }
+
+    private static func isPermissionError(_ error: Error) -> Bool {
+        let error = error as NSError
+        if error.domain == NSCocoaErrorDomain, error.code == NSFileWriteNoPermissionError { return true }
+        if error.domain == NSPOSIXErrorDomain, [Int(EPERM), Int(EACCES)].contains(error.code) { return true }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? Error { return isPermissionError(underlying) }
+        return false
+    }
+
+    /// Errors leave the grid first: it sits above ordinary windows and would hide the alert.
+    private func report(_ message: String) {
+        hide()
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = message
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+    }
+
     // MARK: Window
 
     private func makePanel() -> LauncherPanel {
@@ -160,7 +235,7 @@ final class AppLauncher: NSObject, NSWindowDelegate {
 
     private func installMonitor() {
         guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .scrollWheel]) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .scrollWheel, .flagsChanged]) { [weak self] event in
             MainActor.assumeIsolated {
                 guard let self, let panel = self.panel, event.window === panel else { return event }
                 return self.handle(event) ? nil : event
@@ -175,6 +250,10 @@ final class AppLauncher: NSObject, NSWindowDelegate {
 
     /// True when the event was used here and should go no further.
     private func handle(_ event: NSEvent) -> Bool {
+        if event.type == .flagsChanged {
+            model.optionChanged(isDown: event.modifierFlags.contains(.option))
+            return false
+        }
         if event.type == .scrollWheel {
             // Pages stay put while a folder is open over them.
             if model.openFolderID == nil { handleScroll(event) }
@@ -183,18 +262,29 @@ final class AppLauncher: NSObject, NSWindowDelegate {
         // While an input method is composing (pinyin, for one), Return, Esc
         // and the arrows pick and dismiss candidates; leave them to it.
         if let editor = panel?.firstResponder as? NSTextView, editor.hasMarkedText() { return false }
-        // With a folder open, keys belong to its name field; Esc closes it.
-        if model.openFolderID != nil {
-            guard event.keyCode == 53 else { return false }
-            panel?.makeFirstResponder(nil)
-            model.closeFolder()
+        // Esc backs out one step at a time.
+        if event.keyCode == 53 {
+            if model.pendingRemoval != nil {
+                model.cancelRemoval()
+            } else if model.isEditing {
+                model.endEditing()
+            } else if model.openFolderID != nil {
+                panel?.makeFirstResponder(nil)
+                model.closeFolder()
+            } else if !model.query.isEmpty {
+                model.query = ""
+            } else {
+                hide()
+            }
             return true
         }
+        // The question takes no keys: removing an app needs a click.
+        if model.pendingRemoval != nil { return true }
+        // With a folder open, keys belong to its name field.
+        if model.openFolderID != nil { return false }
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) { return false }
 
         switch event.keyCode {
-        case 53: // Esc: clear the search first, then close.
-            if model.query.isEmpty { hide() } else { model.query = "" }
         case 36, 76: model.activateSelection()
         case 123: model.move(columns: -1, rows: 0)
         case 124: model.move(columns: 1, rows: 0)
@@ -205,6 +295,7 @@ final class AppLauncher: NSObject, NSWindowDelegate {
             guard !(panel?.firstResponder is NSTextView), let characters = event.characters, !characters.isEmpty,
                   characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
             else { return false }
+            model.endEditing()
             model.query += characters
             model.focusRequest += 1
         }

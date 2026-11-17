@@ -142,3 +142,58 @@ final class LauncherLayoutTests: XCTestCase {
         XCTAssertEqual(metrics.center(of: 8), CGPoint(x: 250, y: 200))
     }
 }
+
+final class LauncherDropAndRemovalTests: XCTestCase {
+    private let ids = ["app:A", "app:B", "folder:F", "app:D"]
+
+    func testPassingOverANeighboursEdgeMovesOnlyThere() {
+        // Over the side of B: take B's place (once the pointer rests).
+        XCTAssertEqual(LauncherDropAction.decide(ids: ids, dragged: "app:A", draggedIsApp: true, hoveredIndex: 1, zone: .side), .move(to: 1))
+    }
+
+    func testOverTheMiddleOfAnotherAppOrFolderMerges() {
+        XCTAssertEqual(LauncherDropAction.decide(ids: ids, dragged: "app:A", draggedIsApp: true, hoveredIndex: 1, zone: .center), .merge(into: "app:B"))
+        XCTAssertEqual(LauncherDropAction.decide(ids: ids, dragged: "app:D", draggedIsApp: true, hoveredIndex: 2, zone: .center), .merge(into: "folder:F"))
+    }
+
+    func testOwnCellStays() {
+        XCTAssertEqual(LauncherDropAction.decide(ids: ids, dragged: "app:B", draggedIsApp: true, hoveredIndex: 1, zone: .center), .stay)
+        XCTAssertEqual(LauncherDropAction.decide(ids: ids, dragged: "app:B", draggedIsApp: true, hoveredIndex: 1, zone: .side), .stay)
+    }
+
+    func testFoldersOnlyMoveAndPastTheEndMeansLast() {
+        XCTAssertEqual(LauncherDropAction.decide(ids: ids, dragged: "folder:F", draggedIsApp: false, hoveredIndex: 0, zone: .center), .move(to: 0))
+        XCTAssertEqual(LauncherDropAction.decide(ids: ids, dragged: "app:A", draggedIsApp: true, hoveredIndex: 20, zone: .center), .move(to: 3))
+        XCTAssertEqual(LauncherDropAction.decide(ids: ids, dragged: "app:X", draggedIsApp: true, hoveredIndex: 1, zone: .side), .stay)
+    }
+
+    func testRemoveFromGridAndFolders() {
+        let a = AppEntry(path: "/Applications/A.app", name: "A")
+        let b = AppEntry(path: "/Applications/B.app", name: "B")
+        let c = AppEntry(path: "/Applications/C.app", name: "C")
+        var items: [LauncherItem] = [.app(a), .folder(LauncherFolder(id: "folder:1", name: "F", apps: [b, c]))]
+        LauncherArrangement.remove(&items, app: b.path)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[1].folder?.apps.map(\.name), ["C"])
+        LauncherArrangement.remove(&items, app: c.path)
+        XCTAssertEqual(items.map(\.id), [LauncherItem.appID(a.path)])
+        LauncherArrangement.remove(&items, app: a.path)
+        XCTAssertTrue(items.isEmpty)
+    }
+
+    func testWhichAppsCanBeRemoved() throws {
+        XCTAssertTrue(AppRemoval.isRemovable(path: "/Applications/Firefox.app"))
+        XCTAssertTrue(AppRemoval.isRemovable(path: NSHomeDirectory() + "/Applications/Tool.app"))
+        XCTAssertFalse(AppRemoval.isRemovable(path: "/System/Applications/Calculator.app"))
+        XCTAssertFalse(AppRemoval.isRemovable(path: "/Applications/Qevigo.app", protected: ["/Applications/Qevigo.app"]))
+        XCTAssertFalse(AppRemoval.isRemovable(path: "/Applications/Notes.txt"))
+
+        // An app that only links into /System (as Safari does) is part of macOS.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("qevigo-removal-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let link = dir.appendingPathComponent("Calculator.app")
+        try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "/System/Applications/Calculator.app")
+        XCTAssertFalse(AppRemoval.isRemovable(path: link.path))
+    }
+}

@@ -12,7 +12,11 @@ final class LauncherModel: ObservableObject {
     /// What the grid shows: the arrangement, or matching apps while searching.
     @Published private(set) var results: [LauncherItem] = []
     @Published var query = "" {
-        didSet { if query != oldValue { refilter() } }
+        didSet {
+            guard query != oldValue else { return }
+            if isSearching { isEditing = false }
+            refilter()
+        }
     }
     @Published var page = 0
     /// Index into `results`. Nothing is highlighted until you type or use the arrows.
@@ -29,10 +33,21 @@ final class LauncherModel: ObservableObject {
     @Published private(set) var mergeTargetID: String?
     /// A drag from an open folder that has left the folder.
     @Published private(set) var dragIsOutsideFolder = false
+    /// Icons wiggle and removable apps show a delete badge.
+    @Published private(set) var isEditing = false
+    /// An app waiting for the user to confirm moving it to the Trash.
+    @Published private(set) var pendingRemoval: PendingRemoval?
+
+    struct PendingRemoval: Equatable {
+        let app: AppEntry
+        let isRunning: Bool
+    }
 
     var onLaunch: (AppEntry) -> Void = { _ in }
     var onDismiss: () -> Void = {}
     var onLayoutChange: (LauncherLayout) -> Void = { _ in }
+    var onRemove: (AppEntry) -> Void = { _ in }
+    var isRunning: (AppEntry) -> Bool = { _ in false }
 
     static let shuffle = Animation.spring(response: 0.32, dampingFraction: 0.86)
     static var folderName: String { tr("文件夹", "Folder") }
@@ -46,6 +61,12 @@ final class LauncherModel: ObservableObject {
     private var mergeWork: DispatchWorkItem?
     private var pendingTurn = 0
     private var turnWork: DispatchWorkItem?
+    private var pendingMove: Int?
+    private var moveWork: DispatchWorkItem?
+    /// Editing was entered by holding Option and ends when it is let go.
+    private var editingByOption = false
+    /// Set by a long press, so letting go does not also open the app.
+    private var suppressNextTap = false
 
     var pageCount: Int { max(1, Int((Double(results.count) / Double(grid.perPage)).rounded(.up))) }
     var isSearching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -108,8 +129,12 @@ final class LauncherModel: ObservableObject {
         page = 0
         openFolderID = nil
         draggingID = nil
+        isEditing = false
+        editingByOption = false
+        pendingRemoval = nil
         cancelMerge()
         cancelTurn()
+        cancelMove()
         query = ""
         refilter()
     }
@@ -180,6 +205,92 @@ final class LauncherModel: ObservableObject {
         persist()
     }
 
+    // MARK: Editing and removing
+
+    /// A tap that should open something; false right after a long press.
+    func consumeTap() -> Bool {
+        if suppressNextTap {
+            suppressNextTap = false
+            return false
+        }
+        return true
+    }
+
+    func longPressed() {
+        suppressNextTap = true
+        beginEditing()
+    }
+
+    func beginEditing() {
+        guard !isEditing, !isSearching else { return }
+        editingByOption = false
+        withAnimation(.easeOut(duration: 0.15)) { isEditing = true }
+    }
+
+    func endEditing() {
+        guard isEditing else { return }
+        editingByOption = false
+        withAnimation(.easeOut(duration: 0.15)) { isEditing = false }
+    }
+
+    /// Holding Option shows the delete badges until it is let go, as in Launchpad.
+    func optionChanged(isDown: Bool) {
+        if isDown, !isEditing, !isSearching {
+            beginEditing()
+            editingByOption = true
+        } else if !isDown, editingByOption {
+            endEditing()
+        }
+    }
+
+    func canRemove(_ app: AppEntry) -> Bool {
+        AppRemoval.isRemovable(path: app.path, protected: [Bundle.main.bundlePath])
+    }
+
+    func requestRemoval(_ app: AppEntry) {
+        guard canRemove(app) else { return }
+        // Clicking the badge is a decision; Option no longer needs holding.
+        editingByOption = false
+        withAnimation(.easeOut(duration: 0.15)) { pendingRemoval = PendingRemoval(app: app, isRunning: isRunning(app)) }
+    }
+
+    func cancelRemoval() {
+        withAnimation(.easeIn(duration: 0.12)) { pendingRemoval = nil }
+    }
+
+    func confirmRemoval() {
+        guard let removal = pendingRemoval else { return }
+        pendingRemoval = nil
+        onRemove(removal.app)
+    }
+
+    /// The app is in the Trash: take it off the grid and out of its folder.
+    func didRemove(path: String) {
+        installed.removeAll { $0.path == path }
+        withAnimation(Self.shuffle) {
+            LauncherArrangement.remove(&items, app: path)
+            if isSearching {
+                results.removeAll { $0.app?.path == path }
+            } else {
+                results = items
+            }
+        }
+        page = min(page, pageCount - 1)
+        persist()
+    }
+
+    /// A click on empty space backs out one step: the question, then editing,
+    /// then the whole grid.
+    func backgroundTapped() {
+        if pendingRemoval != nil {
+            cancelRemoval()
+        } else if isEditing {
+            endEditing()
+        } else {
+            onDismiss()
+        }
+    }
+
     // MARK: Keyboard
 
     func move(columns: Int, rows: Int) {
@@ -214,6 +325,7 @@ final class LauncherModel: ObservableObject {
         if draggingID == nil {
             draggingID = id
             selection = nil
+            suppressNextTap = false
         }
         dragPoint = point
 
@@ -225,19 +337,23 @@ final class LauncherModel: ObservableObject {
         }
         cancelTurn()
 
-        guard let from = items.firstIndex(where: { $0.id == id }) else { return }
+        guard let dragged = items.first(where: { $0.id == id }) else { return }
         let hit = metrics.slot(at: point)
-        let index = page * grid.perPage + hit.index
-        if hit.zone == .center, index < items.count, items[index].id != id {
-            if items[from].app != nil { scheduleMerge(onto: items[index].id) }
-            return
-        }
-        cancelMerge()
-        let destination = min(index, items.count - 1)
-        guard destination != from else { return }
-        withAnimation(Self.shuffle) {
-            LauncherArrangement.move(&items, id: id, to: destination)
-            results = items
+        // Nothing happens until the pointer rests, so crossing a neighbour on
+        // the way to the middle of another app does not push that app away.
+        switch LauncherDropAction.decide(
+            ids: items.map(\.id), dragged: id, draggedIsApp: dragged.app != nil,
+            hoveredIndex: page * grid.perPage + hit.index, zone: hit.zone
+        ) {
+        case .merge(let target):
+            cancelMove()
+            scheduleMerge(onto: target)
+        case .move(let destination):
+            cancelMerge()
+            scheduleMove(id, to: destination)
+        case .stay:
+            cancelMerge()
+            cancelMove()
         }
     }
 
@@ -248,8 +364,15 @@ final class LauncherModel: ObservableObject {
                 LauncherArrangement.merge(&items, dragged: id, onto: target, folderName: Self.folderName)
                 results = items
             }
+        } else if let id = draggingID, let destination = pendingMove {
+            // Let go over a cell before the rest had moved: it goes there anyway.
+            withAnimation(Self.shuffle) {
+                LauncherArrangement.move(&items, id: id, to: destination)
+                results = items
+            }
         }
         cancelMerge()
+        cancelMove()
         finishDrag()
     }
 
@@ -297,6 +420,14 @@ final class LauncherModel: ObservableObject {
         results = items
         if open { openFolderID = folder }
         return folder
+    }
+
+    /// For screenshots: editing on, and optionally the question for the
+    /// first removable app.
+    func demoEditing(askToRemove: Bool) {
+        beginEditing()
+        guard askToRemove, let app = LauncherArrangement.allApps(items).first(where: canRemove) else { return }
+        pendingRemoval = PendingRemoval(app: app, isRunning: false)
     }
 
     // MARK: Private
@@ -370,5 +501,29 @@ final class LauncherModel: ObservableObject {
         turnWork?.cancel()
         turnWork = nil
         pendingTurn = 0
+    }
+
+    private func scheduleMove(_ id: String, to destination: Int) {
+        guard pendingMove != destination else { return }
+        cancelMove()
+        pendingMove = destination
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.draggingID == id, self.pendingMove == destination else { return }
+                self.pendingMove = nil
+                withAnimation(Self.shuffle) {
+                    LauncherArrangement.move(&self.items, id: id, to: destination)
+                    self.results = self.items
+                }
+            }
+        }
+        moveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+
+    private func cancelMove() {
+        moveWork?.cancel()
+        moveWork = nil
+        pendingMove = nil
     }
 }

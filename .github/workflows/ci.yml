@@ -71,6 +71,8 @@ jobs:
           perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-search.png" --query calc || true
           perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-folder.png" --demo-folder || true
           perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-folder-open.png" --demo-folder --open-folder || true
+          perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-edit.png" --demo-edit || true
+          perl -e 'alarm 60; exec @ARGV' "$APP" --demo-launcher "$OUT/launcher-remove.png" --demo-edit --ask-remove || true
           ls -l "$OUT"
 
       - uses: actions/upload-artifact@v4

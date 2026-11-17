@@ -15,7 +15,7 @@ struct LauncherView: View {
                 // Empty space anywhere closes the grid, as it did in Launchpad.
                 Color.black.opacity(0.001)
                     .contentShape(Rectangle())
-                    .onTapGesture { model.onDismiss() }
+                    .onTapGesture { model.backgroundTapped() }
 
                 VStack(spacing: 0) {
                     searchField.padding(.top, model.searchTop)
@@ -40,6 +40,12 @@ struct LauncherView: View {
                 }
 
                 draggedIcon
+
+                if let removal = model.pendingRemoval {
+                    RemovalConfirmation(model: model, removal: removal)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .transition(.opacity)
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .coordinateSpace(name: Self.space)
@@ -121,6 +127,8 @@ private struct ItemCell: View {
     /// Set when the cell is inside this open folder.
     let folder: LauncherFolder?
 
+    @State private var wiggle = false
+
     var body: some View {
         let isDragged = model.draggingID == item.id
         let isMergeTarget = model.mergeTargetID == item.id
@@ -132,7 +140,9 @@ private struct ItemCell: View {
                         .fill(Color.white.opacity(isMergeTarget ? 0.3 : 0))
                         .padding(-10)
                 )
+                .overlay(alignment: .topLeading) { deleteBadge }
                 .scaleEffect(isMergeTarget ? 1.1 : 1)
+                .rotationEffect(.degrees(model.isEditing && !isDragged ? (wiggle ? 1.8 : -1.8) : 0))
             Text(item.name)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.white)
@@ -150,8 +160,39 @@ private struct ItemCell: View {
         // Not zero: the cell must keep receiving the drag it started.
         .opacity(isDragged ? 0.001 : 1)
         .gesture(drag.exclusively(before: TapGesture().onEnded { tap() }))
+        // Holding still on an icon starts editing, as in Launchpad.
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in model.longPressed() })
         .animation(.easeOut(duration: 0.15), value: isMergeTarget)
         .help(item.name)
+        .onAppear { if model.isEditing { startWiggle() } }
+        .onChange(of: model.isEditing) { _, editing in
+            if editing { startWiggle() } else { wiggle = false }
+        }
+    }
+
+    /// Shown on apps that can go to the Trash while editing.
+    @ViewBuilder
+    private var deleteBadge: some View {
+        if model.isEditing, let app = item.app, model.canRemove(app), model.draggingID != item.id {
+            Button { model.requestRemoval(app) } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(Color.black.opacity(0.75), Color.white.opacity(0.92))
+                    .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+            }
+            .buttonStyle(.plain)
+            .offset(x: -8, y: -8)
+            .help(tr("移到废纸篓", "Move to Trash"))
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    /// Each icon wobbles at a slightly different pace so they do not move in step.
+    private func startWiggle() {
+        wiggle = false
+        let pace = 0.11 + Double(abs(item.id.hashValue) % 5) * 0.008
+        withAnimation(.easeInOut(duration: pace).repeatForever(autoreverses: true)) { wiggle = true }
     }
 
     private var drag: some Gesture {
@@ -173,6 +214,7 @@ private struct ItemCell: View {
     }
 
     private func tap() {
+        guard model.consumeTap() else { return }
         if folder != nil, let app = item.app {
             model.launch(app)
         } else {
@@ -299,5 +341,59 @@ private struct FolderOverlay: View {
     private func close() {
         commit()
         model.closeFolder()
+    }
+}
+
+/// Asks before moving an app to the Trash. Drawn inside the grid, which sits
+/// above ordinary windows, so a system alert would open behind it.
+private struct RemovalConfirmation: View {
+    @ObservedObject var model: LauncherModel
+    let removal: LauncherModel.PendingRemoval
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .contentShape(Rectangle())
+                .onTapGesture { model.cancelRemoval() }
+
+            VStack(spacing: 14) {
+                Image(nsImage: model.icon(for: removal.app))
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 64, height: 64)
+                Text(removal.isRunning
+                     ? tr("「\(removal.app.name)」正在运行，要退出并移到废纸篓吗？", "“\(removal.app.name)” is running. Quit it and move it to the Trash?")
+                     : tr("将「\(removal.app.name)」移到废纸篓？", "Move “\(removal.app.name)” to the Trash?"))
+                    .font(.system(size: 15, weight: .semibold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white)
+                Text(tr(
+                    "之后可以从废纸篓恢复。应用留在「资源库」里的设置和缓存不会一起删除。",
+                    "It can be restored from the Trash. Settings and caches it left in Library are not removed."
+                ))
+                .font(.system(size: 12))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.7))
+                HStack(spacing: 12) {
+                    Button(tr("取消", "Cancel")) { model.cancelRemoval() }
+                        .controlSize(.large)
+                    Button(removal.isRunning ? tr("退出并移到废纸篓", "Quit and Move to Trash") : tr("移到废纸篓", "Move to Trash"),
+                           role: .destructive) { model.confirmRemoval() }
+                        .controlSize(.large)
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                }
+                .padding(.top, 4)
+            }
+            .padding(24)
+            .frame(width: 360)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {}
+        }
     }
 }

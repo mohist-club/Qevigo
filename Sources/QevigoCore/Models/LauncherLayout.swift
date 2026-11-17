@@ -243,3 +243,57 @@ public struct LauncherGridMetrics: Equatable, Sendable {
         )
     }
 }
+
+/// What letting go of a dragged item over a point would do. The grid only
+/// acts on it after the pointer rests there briefly, so passing over a
+/// neighbour on the way to another cell does not push it aside.
+public enum LauncherDropAction: Equatable, Sendable {
+    case stay
+    /// Take the place at this index; the rest shift.
+    case move(to: Int)
+    /// Join this app or folder (making a folder when it is an app).
+    case merge(into: String)
+
+    /// `hoveredIndex` counts across pages and may point past the last item.
+    public static func decide(
+        ids: [String], dragged: String, draggedIsApp: Bool,
+        hoveredIndex: Int, zone: LauncherGridMetrics.Zone
+    ) -> LauncherDropAction {
+        guard let from = ids.firstIndex(of: dragged) else { return .stay }
+        if zone == .center, draggedIsApp, ids.indices.contains(hoveredIndex), ids[hoveredIndex] != dragged {
+            return .merge(into: ids[hoveredIndex])
+        }
+        let destination = min(max(hoveredIndex, 0), ids.count - 1)
+        return destination == from ? .stay : .move(to: destination)
+    }
+}
+
+public extension LauncherArrangement {
+    /// Drops an app that was uninstalled, wherever it is; a folder it leaves
+    /// empty goes too.
+    static func remove(_ items: inout [LauncherItem], app path: String) {
+        items = items.compactMap { item in
+            switch item {
+            case .app(let app):
+                return app.path == path ? nil : item
+            case .folder(var folder):
+                folder.apps.removeAll { $0.path == path }
+                return folder.apps.isEmpty ? nil : .folder(folder)
+            }
+        }
+    }
+}
+
+/// Which apps the grid offers to move to the Trash.
+public enum AppRemoval {
+    /// Apps that are part of macOS (under /System, including Safari, which
+    /// /Applications only links to) cannot be removed, nor can `protected`
+    /// ones such as Qevigo itself.
+    public static func isRemovable(path: String, protected: Set<String> = []) -> Bool {
+        guard path.hasSuffix(".app") else { return false }
+        let resolved = (path as NSString).resolvingSymlinksInPath
+        if resolved.hasPrefix("/System/") || path.hasPrefix("/System/") { return false }
+        let standardized = Set(protected.map { ($0 as NSString).resolvingSymlinksInPath })
+        return !standardized.contains(resolved)
+    }
+}

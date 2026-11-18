@@ -175,9 +175,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// One item per enabled binding, showing its key combination on the right.
+    /// The built-in All Apps grid comes first whenever it is switched on, with
+    /// or without a key recorded.
     private func addBindingItems(to menu: NSMenu) {
+        if env.settings.preferences.appLauncherShortcutEnabled {
+            let launcher = NSMenuItem(title: tr("所有应用", "All Apps"), action: #selector(showAllApps), keyEquivalent: "")
+            launcher.target = self
+            let image = NSImage(systemSymbolName: "square.grid.3x3.fill", accessibilityDescription: nil)
+            image?.size = NSSize(width: 16, height: 16)
+            launcher.image = image
+            launcher.setShortcut(for: .showAllApplications)
+            menu.addItem(launcher)
+        }
         let bindings = env.settings.bindings.filter(\.isEnabled)
         guard !bindings.isEmpty else {
+            // All Apps is already listed, so the menu is not empty.
+            guard !env.settings.preferences.appLauncherShortcutEnabled else { return }
             let empty = NSMenuItem(title: tr("尚未设置快捷键", "No Shortcuts Yet"), action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
@@ -217,6 +230,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func openShortcutsSettings() { openSettings(tab: .shortcuts) }
+
+    @objc private func showAllApps() { AppLauncher.shared.show() }
 
     // Global hotkeys would be buffered while the menu tracks events and fire
     // after it closes, so pause them while the menu is open.
